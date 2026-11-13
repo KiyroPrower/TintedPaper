@@ -1,0 +1,93 @@
+{
+  "baseline": {
+    "minecraft": "26.3",
+    "paper": "df120fd8b5211f61146a59f69497a5a62064b917",
+    "sourceRepository": "https://github.com/BX-Team/DivineMC",
+    "sourceCommit": "a02492aa29a22f98066fd2a7ac946f310b6f9ece",
+    "status": "in-progress",
+    "validation": "API tests: 479 passed, 2 skipped. Complete server suite: 10138 passed, 86 skipped, zero failures/errors, including five API extension regressions. Clean patch reapplication, JAR generation and distribution checks passed with BUILD_NUMBER=10. No server startup, production deployment or benchmark.",
+    "scope": "Active DivineMC features and supporting sources. Historical removed patches are reference only. Existing Leaf implementations take precedence over duplicate ports.",
+    "copyright": "Original patch authors and licenses are preserved."
+  },
+  "decisions": [
+    {
+      "source": "divinemc-api/paper-patches/features/0001-Rebrand.patch",
+      "status": "project-specific",
+      "reason": "Retain TintedPaper's own identity, build metadata and attribution. Replacing it with the source fork's branding is not a feature port."
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0002-Delete-Timings.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited API already has its own Timings removal patch covering the timing classes and the command/plugin-manager call sites. Keep that version instead of replaying duplicate deletions.",
+      "evidence": ["tintedpaper-api/paper-patches/features/0011-Remove-Timings.patch"]
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0009-SparklyPaper-Parallel-world-ticking.patch",
+      "status": "covered-by-base",
+      "reason": "The same isParallelWorldTickingEnabled, getTickTimes and getAverageTickTime API signatures and defaults are already provided by the inherited Fish API patch. Keep the existing version.",
+      "evidence": ["tintedpaper-api/paper-patches/features/0017-Fish-Parallel-World-Ticking-API.patch"]
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0007-Pufferfish-Sentry.patch",
+      "status": "covered-by-base",
+      "reason": "The plugin/event context logging hooks are already provided by the inherited Pufferfish Sentry integration. Retain the existing version rather than duplicating the feature. The source's additional legacy enable-failure lifecycle change is separate from those logging hooks and remains under review.",
+      "evidence": ["tintedpaper-api/paper-patches/features/0010-Pufferfish-Sentry.patch"]
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0003-Delete-ReloadCommand.patch",
+      "support": ["divinemc-server/paper-patches/features/0004-Delete-ReloadCommand.patch"],
+      "status": "requires-compatibility-adaptation",
+      "reason": "The source deletes the public ReloadCommand class and removes Paper's lifecycle guard from CraftServer.reload. A command-level adaptation must retain API linkage and lifecycle validation; do not blindly import those deletions.",
+      "evidence": ["paper-api/src/main/java/org/bukkit/command/defaults/ReloadCommand.java", "paper-server/src/main/java/org/bukkit/craftbukkit/CraftServer.java"]
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0004-Expanded-Adventure-support.patch",
+      "status": "ported",
+      "reason": "Bukkit Color implements Adventure TextColor without discarding its Bukkit alpha channel. DyeColor can provide RGB values and apply a text style.",
+      "evidence": ["paper-api/src/main/java/org/bukkit/Color.java", "paper-api/src/main/java/org/bukkit/DyeColor.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineApiExtensionsTest.java"]
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0005-Extend-Location-API.patch",
+      "status": "ported",
+      "reason": "Additive fluent setters, axis offsets, block centering and coordinate comparison. Centering floors negative coordinates; isSame intentionally ignores world and rotation, matching the source API.",
+      "evidence": ["paper-api/src/main/java/org/bukkit/Location.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineApiExtensionsTest.java"]
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0006-Extend-Sound-API.patch",
+      "status": "ported",
+      "reason": "Default methods delegate to the existing World sound APIs. Blocks use their center and BLOCKS category. Entities retain their identity as sound emitters and infer the category unless explicitly supplied.",
+      "evidence": ["paper-api/src/main/java/org/bukkit/block/Block.java", "paper-api/src/main/java/org/bukkit/entity/Entity.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineApiExtensionsTest.java"]
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0008-Paper-PR-Player-standing-on-position-API.patch",
+      "support": ["divinemc-server/paper-patches/features/0006-Paper-PR-Player-standing-on-position-API.patch"],
+      "status": "ported",
+      "reason": "API and CraftEntity implementation expose the native movement-affecting block separately from the optional collision support block, without scanning or loading blocks.",
+      "evidence": ["paper-api/src/main/java/org/bukkit/entity/Entity.java", "paper-server/src/main/java/org/bukkit/craftbukkit/entity/CraftEntity.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/entity/Entity.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineApiExtensionsTest.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0009-C2ME-Optimize-world-gen-math.patch",
+      "status": "no-effective-change",
+      "reason": "The proposed Math.min local remains inside the same per-position lambda. It neither hoists the calculation out of the lambda nor changes the generated terrain. No extra patch is needed for that textual refactor."
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0034-Player-ProfileResult-caching.patch",
+      "status": "requires-redesign",
+      "reason": "The source caches successful hasJoinedServer results by username and returns them for a later login challenge without fresh session validation. Do not import this authentication bypass; any replacement must validate every new challenge."
+    }
+  ],
+  "compatibilityFixes": [
+    {
+      "status": "fixed",
+      "attribution": "Leaf-introduced",
+      "reason": "The inherited collection optimization used EnumMap for MushroomBlockTexture cap faces, but several enum constants intentionally use null. Restore the pinned Paper HashMap so initialization, nullable face lookup and legacy material APIs keep working.",
+      "evidence": ["tintedpaper-api/paper-patches/features/0021-Replace-data-maps-with-optimized-collection.patch", "paper-api/src/main/java/org/bukkit/material/types/MushroomBlockTexture.java", "paper-api/src/test/java/org/bukkit/materials/MaterialDataTest.java"]
+    }
+  ],
+  "pendingReview": [
+    "API supporting Java sources, including bottle events, and the pending reload-command / legacy enable-failure adaptations need their matching native and server integrations.",
+    "All active Minecraft feature patches not recorded above. Preliminary title matches are not sufficient to classify a patch as covered.",
+    "All remaining Paper server feature and single-file patches, Purpur patches, supporting Java sources, dependencies and native resources.",
+    "Partial duplicates require review of each remaining behavior before porting. Threaded features require ownership, lifecycle and shutdown review."
+  ]
+}

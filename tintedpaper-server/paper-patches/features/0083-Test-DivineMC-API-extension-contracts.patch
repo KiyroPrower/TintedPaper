@@ -1,0 +1,109 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 14:16:58 -0300
+Subject: [PATCH] Test DivineMC API extension contracts
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineApiExtensionsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineApiExtensionsTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a3c8b15e82758aea2bbb4f4448dfc27b560fd6d
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineApiExtensionsTest.java
+@@ -0,0 +1,97 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.util.Optional;
++import net.kyori.adventure.text.Component;
++import net.kyori.adventure.text.format.Style;
++import net.minecraft.core.BlockPos;
++import net.minecraft.server.level.ServerLevel;
++import org.bukkit.Color;
++import org.bukkit.DyeColor;
++import org.bukkit.Location;
++import org.bukkit.Sound;
++import org.bukkit.SoundCategory;
++import org.bukkit.World;
++import org.bukkit.block.Block;
++import org.bukkit.craftbukkit.entity.CraftEntity;
++import org.bukkit.entity.Ambient;
++import org.bukkit.entity.Entity;
++import org.bukkit.entity.Monster;
++import org.bukkit.entity.Player;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DivineApiExtensionsTest {
++    @Test
++    void colorsApplyToAdventureWithoutLosingRgbOrBukkitAlpha() {
++        Color color = Color.fromARGB(12, 34, 56, 78);
++        assertEquals(color.asRGB(), Component.text("color").color(color).color().value());
++        assertEquals(12, color.getAlpha());
++        for (DyeColor dye : DyeColor.values()) {
++            assertEquals(dye.getColor().asRGB(), Style.style(dye).color().value());
++        }
++    }
++
++    @Test
++    void locationCenterUsesFloorForNegativeCoordinatesAndKeepsRotation() {
++        World world = mock(World.class);
++        Location location = new Location(world, -0.1, -1.1, -2.9, 40, -30);
++        assertSame(location, location.center());
++        assertEquals(new Location(world, -0.5, -1.5, -2.5, 40, -30), location);
++        assertSame(location, location.center(0.25));
++        assertEquals(-1.75, location.getY());
++        assertTrue(location.isSame(new Location(null, -0.5, -1.75, -2.5)));
++        assertFalse(location.isSame(new Location(null, -0.5, -1.74, -2.5)));
++    }
++
++    @Test
++    void blockSoundUsesItsCenterAndAllowsAnExplicitCategory() {
++        World world = mock(World.class);
++        Block block = mock(Block.class, CALLS_REAL_METHODS);
++        when(block.getWorld()).thenReturn(world);
++        when(block.getLocation()).thenAnswer(ignored -> new Location(world, -2, 64, 3));
++        Sound sound = Sound.BLOCK_NOTE_BLOCK_HARP;
++        block.emitSound(sound, 0.5F, 1.5F);
++        block.emitSound(sound, SoundCategory.MASTER, 0.25F, 0.75F);
++        Location center = new Location(world, -1.5, 64.5, 3.5);
++        verify(world).playSound(center, sound, SoundCategory.BLOCKS, 0.5F, 1.5F);
++        verify(world).playSound(center, sound, SoundCategory.MASTER, 0.25F, 0.75F);
++    }
++
++    @Test
++    void entitySoundRoutesToTheEntityWithItsDefaultOrExplicitCategory() {
++        World world = mock(World.class);
++        Class<?>[] types = {Player.class, Ambient.class, Monster.class, Entity.class};
++        SoundCategory[] categories = {SoundCategory.PLAYERS, SoundCategory.AMBIENT, SoundCategory.HOSTILE, SoundCategory.NEUTRAL};
++        for (int index = 0; index < types.length; index++) {
++            Entity entity = (Entity) mock(types[index], CALLS_REAL_METHODS);
++            when(entity.getWorld()).thenReturn(world);
++            entity.emitSound(Sound.BLOCK_NOTE_BLOCK_HARP, 0.5F, 1.5F);
++            verify(world).playSound(entity, Sound.BLOCK_NOTE_BLOCK_HARP, categories[index], 0.5F, 1.5F);
++            entity.emitSound(Sound.BLOCK_NOTE_BLOCK_HARP, SoundCategory.RECORDS, 0.25F, 0.75F);
++            verify(world).playSound(entity, Sound.BLOCK_NOTE_BLOCK_HARP, SoundCategory.RECORDS, 0.25F, 0.75F);
++        }
++    }
++
++    @Test
++    void supportQueriesFollowNativePositionsAndReturnNullWhenAirborne() {
++        ServerLevel level = mock(ServerLevel.class);
++        net.minecraft.world.entity.Entity handle = mock(net.minecraft.world.entity.Entity.class);
++        when(handle.level()).thenReturn(level);
++        BlockPos movement = new BlockPos(-2, 63, 3);
++        BlockPos support = new BlockPos(-2, 64, 3);
++        when(handle.getBlockPosBelowThatAffectsMyMovement()).thenReturn(movement);
++        handle.mainSupportingBlockPos = Optional.of(support);
++        CraftEntity entity = mock(CraftEntity.class, CALLS_REAL_METHODS);
++        when(entity.getHandle()).thenReturn(handle);
++        assertEquals(63, entity.getMovementAffectingBlock().getY());
++        assertEquals(64, entity.getSupportingBlock().getY());
++        handle.mainSupportingBlockPos = Optional.empty();
++        assertNull(entity.getSupportingBlock());
++        assertEquals(63, entity.getMovementAffectingBlock().getY());
++        verify(level, never()).getBlockState(any(BlockPos.class));
++    }
++}

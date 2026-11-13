@@ -1,0 +1,80 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Mon, 3 Mar 2025 01:16:29 +0300
+Subject: [PATCH] Extend Sound API
+
+
+diff --git a/src/main/java/org/bukkit/block/Block.java b/src/main/java/org/bukkit/block/Block.java
+index 5c75b3d049f22573c4bc85ed06fc7f1efa31b361..36e59408f5e77f82a491252b7c6d90b62d7709a3 100644
+--- a/src/main/java/org/bukkit/block/Block.java
++++ b/src/main/java/org/bukkit/block/Block.java
+@@ -839,4 +839,29 @@ public interface Block extends Metadatable, Translatable, net.kyori.adventure.tr
+      * @return {@code true} if the block can suffocate
+      */
+     boolean isSuffocating();
++
++    // DivineMC start - Extend Sound API
++    /**
++     * Plays a sound at the location of the block
++     *
++     * @param sound sound to play
++     * @param volume volume of the sound
++     * @param pitch pitch of the sound
++     */
++    default void emitSound(@NotNull org.bukkit.Sound sound, float volume, float pitch) {
++        emitSound(sound, org.bukkit.SoundCategory.BLOCKS, volume, pitch);
++    }
++
++    /**
++     * Plays a sound at the location of the block
++     *
++     * @param sound sound to play
++     * @param category category of the sound
++     * @param volume volume of the sound
++     * @param pitch pitch of the sound
++     */
++    default void emitSound(@NotNull org.bukkit.Sound sound, @NotNull org.bukkit.SoundCategory category, float volume, float pitch) {
++        getWorld().playSound(getLocation().toCenterLocation(), sound, category, volume, pitch);
++    }
++    // DivineMC end - Extend Sound API
+ }
+diff --git a/src/main/java/org/bukkit/entity/Entity.java b/src/main/java/org/bukkit/entity/Entity.java
+index b421957fdcdf4b99e663d2f11468f273b91c3ddb..8491c390dbe94a1959abe0f9dc03b7518eed0287 100644
+--- a/src/main/java/org/bukkit/entity/Entity.java
++++ b/src/main/java/org/bukkit/entity/Entity.java
+@@ -1505,4 +1505,35 @@ public interface Entity extends Metadatable, CommandSender, Nameable, Persistent
+      */
+     void setImmuneToFire(@Nullable Boolean fireImmune);
+     // Purpur end - Fire Immunity API
++
++    // DivineMC start - Extend Sound API
++    /**
++     * Plays a sound at the location of the entity
++     *
++     * @param sound sound to play
++     * @param volume volume of the sound
++     * @param pitch pitch of the sound
++     */
++    default void emitSound(@NotNull org.bukkit.Sound sound, float volume, float pitch) {
++        org.bukkit.SoundCategory soundGroup = switch (this) {
++            case HumanEntity humanEntity -> org.bukkit.SoundCategory.PLAYERS;
++            case Ambient ambient -> org.bukkit.SoundCategory.AMBIENT;
++            case Monster monster -> org.bukkit.SoundCategory.HOSTILE;
++            default -> org.bukkit.SoundCategory.NEUTRAL;
++        };
++        emitSound(sound, soundGroup, volume, pitch);
++    }
++
++    /**
++     * Plays a sound at the location of the block
++     *
++     * @param sound sound to play
++     * @param category category of the sound
++     * @param volume volume of the sound
++     * @param pitch pitch of the sound
++     */
++    default void emitSound(@NotNull org.bukkit.Sound sound, @NotNull org.bukkit.SoundCategory category, float volume, float pitch) {
++        getWorld().playSound(this, sound, category, volume, pitch);
++    }
++    // DivineMC end - Extend Sound API
+ }
