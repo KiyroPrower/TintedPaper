@@ -1,0 +1,20 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 14:39:48 -0300
+Subject: [PATCH] Publish stable entity tag snapshots across world ticks
+
+
+diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
+index baa66320f2b8f773add39133f835b476e9ccb8f8..5d1a805f6f529ea4cc20008a2829f1be25d672e9 100644
+--- a/net/minecraft/world/entity/Entity.java
++++ b/net/minecraft/world/entity/Entity.java
+@@ -342,7 +342,8 @@ public abstract class Entity
+     protected UUID uuid; // Purpur - Add toggle for RNG manipulation
+     protected String stringUUID; // Purpur - Add toggle for RNG manipulation
+     private boolean hasGlowingTag;
+-    private final Set<String> tags = new io.papermc.paper.util.SizeLimitedSet<>(new it.unimi.dsi.fastutil.objects.ObjectOpenHashSet<>(), MAX_ENTITY_TAG_COUNT); // Paper - fully limit tag size - replace set impl
++    // TintedPaper - tags can be read by NBT predicates while another world's command changes them.
++    private final Set<String> tags = new io.papermc.paper.util.SizeLimitedSet<>(new java.util.concurrent.CopyOnWriteArraySet<>(), MAX_ENTITY_TAG_COUNT); // Paper - fully limit tag size - replace set impl
+     private final double[] pistonDeltas = new double[]{0.0, 0.0, 0.0};
+     private long pistonDeltasGameTime;
+     protected EntityDimensions dimensions;
