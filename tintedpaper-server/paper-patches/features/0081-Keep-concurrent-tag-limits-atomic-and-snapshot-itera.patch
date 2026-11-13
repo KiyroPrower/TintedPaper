@@ -6,7 +6,7 @@ Subject: [PATCH] Keep concurrent tag limits atomic and snapshot iterators
 
 
 diff --git a/src/main/java/io/papermc/paper/util/SizeLimitedSet.java b/src/main/java/io/papermc/paper/util/SizeLimitedSet.java
-index 1eee077b1e2c6d41bdaa4f1a477c715b13981c6d..1f08bad2a951b3c288b27be820b77b2bc00c9b84 100644
+index 1eee077b1e2c6d41bdaa4f1a477c715b13981c6d..8245413c33815dd75a3c1e2953ecf5f2d303def7 100644
 --- a/src/main/java/io/papermc/paper/util/SizeLimitedSet.java
 +++ b/src/main/java/io/papermc/paper/util/SizeLimitedSet.java
 @@ -1,8 +1,11 @@
@@ -30,18 +30,21 @@ index 1eee077b1e2c6d41bdaa4f1a477c715b13981c6d..1f08bad2a951b3c288b27be820b77b2b
          if (this.size() >= this.maxSize) {
              return false;
          }
-@@ -26,16 +29,47 @@ public class SizeLimitedSet<E> extends ForwardingSet<E> {
+@@ -26,16 +29,50 @@ public class SizeLimitedSet<E> extends ForwardingSet<E> {
      }
  
      @Override
 -    public boolean addAll(final Collection<? extends @Nullable E> collection) {
 -        if ((collection.size() + this.size()) >= this.maxSize) {
 +    public synchronized boolean addAll(final Collection<? extends @Nullable E> collection) {
-+        final Collection<? extends @Nullable E> snapshot = new ArrayList<>(collection);
-+        if (snapshot.size() > this.maxSize - this.size()) {
++        if (collection.size() > this.maxSize - this.size()) {
              return false;
          }
 -        boolean edited = false;
++        final Collection<? extends @Nullable E> snapshot = new ArrayList<>(collection);
++        if (snapshot.size() > this.maxSize - this.size()) {
++            return false;
++        }
 +        return super.addAll(snapshot);
 +    }
  
@@ -86,10 +89,10 @@ index 1eee077b1e2c6d41bdaa4f1a477c715b13981c6d..1f08bad2a951b3c288b27be820b77b2b
      @Override
 diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/EntityTagConcurrencyTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/EntityTagConcurrencyTest.java
 new file mode 100644
-index 0000000000000000000000000000000000000000..7aeb636edd73bdb37bdaf9553c5b2b55e3e3a30f
+index 0000000000000000000000000000000000000000..7f7da4c251ea9bbaaf79502031885e20edcb8f52
 --- /dev/null
 +++ b/src/test/java/org/bukkit/craftbukkit/tinted/EntityTagConcurrencyTest.java
-@@ -0,0 +1,211 @@
+@@ -0,0 +1,216 @@
 +package org.bukkit.craftbukkit.tinted;
 +
 +import io.papermc.paper.configuration.WorldConfiguration;
@@ -97,6 +100,7 @@ index 0000000000000000000000000000000000000000..7aeb636edd73bdb37bdaf9553c5b2b55
 +import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
 +import java.lang.reflect.Method;
 +import java.util.ArrayList;
++import java.util.Collection;
 +import java.util.HashSet;
 +import java.util.Iterator;
 +import java.util.List;
@@ -269,6 +273,10 @@ index 0000000000000000000000000000000000000000..7aeb636edd73bdb37bdaf9553c5b2b55
 +    @Test
 +    void ordinaryBackingSetsKeepIteratorRemovalAndRejectOversizedBatches() {
 +        Set<String> tags = new SizeLimitedSet<>(new HashSet<>(), 2);
++        Collection<String> oversized = mock(Collection.class);
++        when(oversized.size()).thenReturn(3);
++        assertFalse(tags.addAll(oversized));
++        verify(oversized, never()).toArray();
 +        assertFalse(tags.addAll(List.of("a", "b", "c")));
 +        assertTrue(tags.isEmpty());
 +        assertTrue(tags.addAll(List.of("a", "b")));
