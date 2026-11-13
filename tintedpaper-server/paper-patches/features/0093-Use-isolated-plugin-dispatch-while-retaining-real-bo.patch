@@ -1,0 +1,52 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 20:42:08 -0300
+Subject: [PATCH] Use isolated plugin dispatch while retaining real bottle
+ factories
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineBottleEventsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineBottleEventsTest.java
+index e28926de88a332f0976f3ed8c4526a2b03c7dfe0..e1dde44b159d61926a0ec04b566236b121fb6e7c 100644
+--- a/src/test/java/org/bukkit/craftbukkit/tinted/DivineBottleEventsTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineBottleEventsTest.java
+@@ -52,15 +52,18 @@ import static org.mockito.Mockito.*;
+ class DivineBottleEventsTest {
+     private static final BlockPos POS = new BlockPos(1, 65, 2);
+     private PluginManager pluginManager;
++    private PluginManager previousPluginManager;
+ 
+     @BeforeEach
+     void captureDispatch() {
+-        this.pluginManager = Bukkit.getPluginManager();
++        this.previousPluginManager = Bukkit.getPluginManager();
++        this.pluginManager = mock(PluginManager.class);
++        when(Bukkit.getServer().getPluginManager()).thenReturn(this.pluginManager);
+     }
+ 
+     @AfterEach
+     void restoreDispatch() {
+-        doNothing().when(this.pluginManager).callEvent(any(Event.class));
++        when(Bukkit.getServer().getPluginManager()).thenReturn(this.previousPluginManager);
+     }
+ 
+     @Test
+@@ -108,7 +111,8 @@ class DivineBottleEventsTest {
+         for (int cancellation : new int[]{1, 2, 0}) {
+             Actor actor = actor(1);
+             replacePlayerResult(cancellation == 1);
+-            try (var factory = mockStatic(CraftEventFactory.class, CALLS_REAL_METHODS)) {
++            try (var factory = mockStatic(CraftEventFactory.class)) {
++                factory.when(() -> CraftEventFactory.callPlayerFillBottleEvent(any(), any(), any(), any())).thenCallRealMethod();
+                 factory.when(() -> CraftEventFactory.handleCauldronLevelChangeEvent(any(), any(), any(), any(), any())).thenReturn(cancellation != 2);
+                 InteractionResult result = CauldronInteractions.WATER.get(actor.input).interact(state, actor.level, POS, actor.player, InteractionHand.MAIN_HAND, actor.input, Direction.UP);
+                 assertEquals(cancellation == 1 ? InteractionResult.PASS : InteractionResult.SUCCESS, result);
+@@ -161,7 +165,8 @@ class DivineBottleEventsTest {
+                     }
+                     return null;
+                 }).when(this.pluginManager).callEvent(any(Event.class));
+-                try (var factory = mockStatic(CraftEventFactory.class, CALLS_REAL_METHODS)) {
++                try (var factory = mockStatic(CraftEventFactory.class)) {
++                    factory.when(() -> CraftEventFactory.callBlockFillBottleEvent(any(), any(), any(), any())).thenCallRealMethod();
+                     factory.when(() -> CraftEventFactory.handleBlockDispenseEvent(any(), any(), any(), any())).thenReturn(null);
+                     ItemStack result = behavior.dispense(source, actor.input);
+                     assertEquals(cancel ? 1 : 0, actor.input.getCount());

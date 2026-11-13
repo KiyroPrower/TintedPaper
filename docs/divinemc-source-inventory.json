@@ -4,8 +4,8 @@
   "meaning": "Complete path inventory of active patch trees and module-owned src files at the recorded commit; filenames and pending status are not semantic verification or a claim that every supporting file needs copying. Historical removed patches and Git/build caches are excluded.",
   "counts": {
     "patches": 150,
-    "patchesWithDecision": 20,
-    "patchesPendingReview": 130,
+    "patchesWithDecision": 25,
+    "patchesPendingReview": 125,
     "supportingSourceAndResourceFiles": 258
   },
   "patches": [
@@ -67,11 +67,11 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0003-Option-to-disable-method-profiler.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0004-Paper-PR-Add-FillBottleEvents-for-player-and-dispens.patch",
-      "status": "pending-review"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0005-Paper-PR-Throttle-failed-spawn-attempts.patch",
@@ -83,7 +83,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0007-Paper-PR-Add-ticket-on-player-join-to-avoid-chunk-lo.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0008-lithium-fast_util.patch",
@@ -111,7 +111,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0014-SparklyPaper-Skip-distanceToSqr-call-in-ServerEntity.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0015-Carpet-Fixes-Optimized-getBiome-method.patch",
@@ -495,7 +495,7 @@
     },
     {
       "source": "divinemc-server/paper-patches/features/0005-Paper-PR-Add-FillBottleEvents-for-player-and-dispens.patch",
-      "status": "pending-review"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-server/paper-patches/features/0006-Paper-PR-Player-standing-on-position-API.patch",

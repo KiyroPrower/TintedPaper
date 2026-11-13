@@ -1,0 +1,223 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 20:38:13 -0300
+Subject: [PATCH] Verify bottle event cancellation item conservation and plugin
+ results
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineBottleEventsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineBottleEventsTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..f9b13038a5c35b3b747b8b19791631c35afd6992
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineBottleEventsTest.java
+@@ -0,0 +1,210 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.papermc.paper.event.block.BlockFillBottleEvent;
++import io.papermc.paper.event.player.PlayerFillBottleEvent;
++import java.util.List;
++import net.minecraft.core.BlockPos;
++import net.minecraft.core.Direction;
++import net.minecraft.core.cauldron.CauldronInteractions;
++import net.minecraft.core.dispenser.BlockSource;
++import net.minecraft.core.dispenser.DispenseItemBehavior;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.InteractionHand;
++import net.minecraft.world.InteractionResult;
++import net.minecraft.world.entity.AreaEffectCloud;
++import net.minecraft.world.entity.player.Inventory;
++import net.minecraft.world.entity.player.Player;
++import net.minecraft.world.inventory.InventoryMenu;
++import net.minecraft.world.item.BottleItem;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.item.Items;
++import net.minecraft.world.level.block.BeehiveBlock;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.DispenserBlock;
++import net.minecraft.world.level.block.LayeredCauldronBlock;
++import net.minecraft.world.level.block.entity.DispenserBlockEntity;
++import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.material.Fluids;
++import net.minecraft.world.phys.AABB;
++import net.minecraft.world.phys.BlockHitResult;
++import net.minecraft.world.phys.Vec3;
++import org.bukkit.Bukkit;
++import org.bukkit.Material;
++import org.bukkit.craftbukkit.CraftWorld;
++import org.bukkit.craftbukkit.entity.CraftPlayer;
++import org.bukkit.craftbukkit.event.CraftEventFactory;
++import org.bukkit.craftbukkit.inventory.CraftItemStack;
++import org.bukkit.event.Event;
++import org.bukkit.inventory.EquipmentSlot;
++import org.bukkit.support.environment.AllFeatures;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.ArgumentMatchers.*;
++import static org.mockito.Mockito.*;
++
++@AllFeatures
++class DivineBottleEventsTest {
++    private static final BlockPos POS = new BlockPos(1, 65, 2);
++
++    @AfterEach
++    void restoreDispatch() {
++        doNothing().when(Bukkit.getPluginManager()).callEvent(any(Event.class));
++    }
++
++    @Test
++    void cancellationKeepsTheBottleAndDragonCloudAndResyncsOnlyTheHand() throws Exception {
++        Actor actor = actor(2);
++        AreaEffectCloud cloud = mock(AreaEffectCloud.class);
++        when(actor.level.getEntitiesOfClass(eq(AreaEffectCloud.class), any(AABB.class), any())).thenReturn(List.of(cloud));
++        doAnswer(call -> {
++            if (call.getArgument(0) instanceof PlayerFillBottleEvent event) {
++                event.getBottle().setAmount(0);
++                event.setCancelled(true);
++            }
++            return null;
++        }).when(Bukkit.getPluginManager()).callEvent(any(Event.class));
++        assertSame(InteractionResult.PASS, ((BottleItem) Items.GLASS_BOTTLE).use(actor.level, actor.player, InteractionHand.MAIN_HAND));
++        assertEquals(2, actor.input.getCount());
++        verify(cloud, never()).setRadius(anyFloat());
++        verify(actor.inventory, never()).add(any());
++        verify(actor.menu).forceHeldSlot(InteractionHand.MAIN_HAND);
++    }
++
++    @Test
++    void dragonCloudResultsHonorPluginReplacementForSingleAndStackedBottles() throws Exception {
++        replacePlayerResult(false);
++        for (int count : new int[]{1, 2}) {
++            Actor actor = actor(count);
++            AreaEffectCloud cloud = mock(AreaEffectCloud.class);
++            when(cloud.getRadius()).thenReturn(3.0F);
++            when(actor.level.getEntitiesOfClass(eq(AreaEffectCloud.class), any(AABB.class), any())).thenReturn(List.of(cloud));
++            var result = assertInstanceOf(InteractionResult.Success.class, ((BottleItem) Items.GLASS_BOTTLE).use(actor.level, actor.player, InteractionHand.MAIN_HAND));
++            assertEquals(count - 1, actor.input.getCount());
++            verify(cloud).setRadius(2.5F);
++            if (count == 1) {
++                assertTrue(result.heldItemTransformedTo().is(Items.DIAMOND));
++            } else {
++                assertSame(actor.input, result.heldItemTransformedTo());
++                verify(actor.inventory).add(argThat(stack -> stack.is(Items.DIAMOND) && stack.getCount() == 1));
++            }
++        }
++    }
++
++    @Test
++    void cauldronCancellationPrecedesDrainAndBothEventsCanPreventConsumption() throws Exception {
++        BlockState state = Blocks.WATER_CAULDRON.defaultBlockState().setValue(LayeredCauldronBlock.LEVEL, 3);
++        for (int cancellation : new int[]{1, 2, 0}) {
++            Actor actor = actor(1);
++            replacePlayerResult(cancellation == 1);
++            try (var factory = mockStatic(CraftEventFactory.class, CALLS_REAL_METHODS)) {
++                factory.when(() -> CraftEventFactory.handleCauldronLevelChangeEvent(any(), any(), any(), any(), any())).thenReturn(cancellation != 2);
++                InteractionResult result = CauldronInteractions.WATER.get(actor.input).interact(state, actor.level, POS, actor.player, InteractionHand.MAIN_HAND, actor.input, Direction.UP);
++                assertEquals(cancellation == 1 ? InteractionResult.PASS : InteractionResult.SUCCESS, result);
++                if (cancellation == 1) {
++                    factory.verify(() -> CraftEventFactory.handleCauldronLevelChangeEvent(any(), any(), any(), any(), any()), never());
++                }
++                assertEquals(cancellation == 0 ? 0 : 1, actor.input.getCount());
++                if (cancellation == 0) {
++                    verify(actor.player).setItemInHand(eq(InteractionHand.MAIN_HAND), argThat(stack -> stack.is(Items.DIAMOND)));
++                } else {
++                    verify(actor.player, never()).setItemInHand(any(), any());
++                }
++            }
++        }
++    }
++
++    @Test
++    void hiveHoneyIsOnlyConsumedAfterAnAcceptedBottleEvent() throws Exception {
++        BlockState state = Blocks.BEEHIVE.defaultBlockState().setValue(BeehiveBlock.HONEY_LEVEL, 5);
++        for (boolean cancel : new boolean[]{true, false}) {
++            Actor actor = actor(1);
++            replacePlayerResult(cancel);
++            var hit = new BlockHitResult(Vec3.atCenterOf(POS), Direction.UP, POS, false);
++            assertEquals(cancel ? InteractionResult.PASS : InteractionResult.SUCCESS,
++                state.useItemOn(actor.input, actor.level, actor.player, InteractionHand.MAIN_HAND, hit));
++            assertEquals(cancel ? 1 : 0, actor.input.getCount());
++            verify(actor.level, times(cancel ? 0 : 1)).setBlockAndUpdate(eq(POS), eq(state.setValue(BeehiveBlock.HONEY_LEVEL, 0)));
++            if (!cancel) verify(actor.player).setItemInHand(eq(InteractionHand.MAIN_HAND), argThat(stack -> stack.is(Items.DIAMOND)));
++        }
++    }
++
++    @Test
++    void dispensersPreserveInputOnCancellationAndUseTheCustomResult() throws Exception {
++        DispenseItemBehavior behavior = DispenserBlock.DISPENSER_REGISTRY.get(Items.GLASS_BOTTLE);
++        assertNotNull(behavior);
++        for (boolean honey : new boolean[]{true, false}) {
++            for (boolean cancel : new boolean[]{true, false}) {
++                Actor actor = actor(1);
++                BlockState targetState = honey ? Blocks.BEEHIVE.defaultBlockState().setValue(BeehiveBlock.HONEY_LEVEL, 5) : Blocks.AIR.defaultBlockState();
++                BlockState dispenser = Blocks.DISPENSER.defaultBlockState().setValue(DispenserBlock.FACING, Direction.NORTH);
++                BlockPos target = POS.north();
++                when(actor.level.getBlockState(target)).thenReturn(targetState);
++                when(actor.level.getFluidState(target)).thenReturn(Fluids.WATER.defaultFluidState());
++                BlockSource source = new BlockSource(actor.level, POS, dispenser, mock(DispenserBlockEntity.class));
++                doAnswer(call -> {
++                    if (call.getArgument(0) instanceof BlockFillBottleEvent event) {
++                        event.getBottle().setAmount(0);
++                        event.setResultItem(new org.bukkit.inventory.ItemStack(Material.DIAMOND));
++                        event.setCancelled(cancel);
++                    }
++                    return null;
++                }).when(Bukkit.getPluginManager()).callEvent(any(Event.class));
++                try (var factory = mockStatic(CraftEventFactory.class, CALLS_REAL_METHODS)) {
++                    factory.when(() -> CraftEventFactory.handleBlockDispenseEvent(any(), any(), any(), any())).thenReturn(null);
++                    ItemStack result = behavior.dispense(source, actor.input);
++                    assertEquals(cancel ? 1 : 0, actor.input.getCount());
++                    assertTrue(result.is(cancel ? Items.GLASS_BOTTLE : Items.DIAMOND));
++                    if (honey) verify(actor.level, times(cancel ? 0 : 1)).setBlockAndUpdate(eq(target), eq(targetState.setValue(BeehiveBlock.HONEY_LEVEL, 0)));
++                }
++            }
++        }
++    }
++
++    @Test
++    void apiRejectsNullResultsAndRetainsMutableEventResults() {
++        var input = new org.bukkit.inventory.ItemStack(Material.GLASS_BOTTLE);
++        var result = new org.bukkit.inventory.ItemStack(Material.POTION);
++        var playerEvent = new PlayerFillBottleEvent(mock(org.bukkit.entity.Player.class), EquipmentSlot.HAND, input, result);
++        var blockEvent = new BlockFillBottleEvent(mock(org.bukkit.block.Block.class), input, result);
++        assertThrows(NullPointerException.class, () -> playerEvent.setResultItem(null));
++        assertThrows(NullPointerException.class, () -> blockEvent.setResultItem(null));
++        playerEvent.getResultItem().setAmount(2);
++        assertEquals(2, playerEvent.getResultItem().getAmount());
++        assertSame(PlayerFillBottleEvent.getHandlerList(), playerEvent.getHandlers());
++        assertSame(BlockFillBottleEvent.getHandlerList(), blockEvent.getHandlers());
++    }
++
++    private static void replacePlayerResult(boolean cancel) {
++        doAnswer(call -> {
++            if (call.getArgument(0) instanceof PlayerFillBottleEvent event) {
++                event.setResultItem(new org.bukkit.inventory.ItemStack(Material.DIAMOND));
++                event.setCancelled(cancel);
++            }
++            return null;
++        }).when(Bukkit.getPluginManager()).callEvent(any(Event.class));
++    }
++
++    private static Actor actor(int count) throws Exception {
++        ServerLevel level = mock(ServerLevel.class);
++        when(level.getBlockState(any(BlockPos.class))).thenReturn(Blocks.AIR.defaultBlockState());
++        when(level.getWorld()).thenReturn(mock(CraftWorld.class));
++        when(level.getMinecraftWorld()).thenReturn(level);
++        Player player = mock(Player.class);
++        when(player.getBukkitEntity()).thenReturn(mock(CraftPlayer.class));
++        when(player.getBoundingBox()).thenReturn(new AABB(0, 64, 0, 1, 66, 1));
++        Inventory inventory = mock(Inventory.class);
++        when(inventory.add(any())).thenReturn(true);
++        when(player.getInventory()).thenReturn(inventory);
++        InventoryMenu menu = mock(InventoryMenu.class);
++        var menuField = Player.class.getField("inventoryMenu");
++        menuField.setAccessible(true);
++        menuField.set(player, menu);
++        ItemStack input = new ItemStack(Items.GLASS_BOTTLE, count);
++        when(player.getItemInHand(InteractionHand.MAIN_HAND)).thenReturn(input);
++        return new Actor(level, player, inventory, menu, input);
++    }
++
++    private record Actor(ServerLevel level, Player player, Inventory inventory, InventoryMenu menu, ItemStack input) {}
++}
