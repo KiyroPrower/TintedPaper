@@ -11,10 +11,10 @@ This is an incomplete migration, not a replacement release for DPO.
 
 | Active injections | Decision |
 | --- | --- |
-| 13 | Native behaviour implemented and local regression suite passed |
+| 16 | Native behaviour implemented and local regression suite passed |
 | 36 | Equivalent mechanism verified in the pinned TintedPaper/Paper baseline |
 | 6 | Removed 26.2 noise pipeline or DivineMC-only implementation |
-| 402 | Native target found; semantic comparison still pending |
+| 399 | Native target found; semantic comparison still pending |
 | 1 | External target still needs source resolution |
 
 The source manifests contain 458 active injections. Matching a target file is
@@ -74,6 +74,13 @@ decision entries fail rather than disappearing from the inventory.
 - Idle ghasts preserve heading below 0.1 blocks/tick of horizontal movement without
   an attack target. Moving and targeting retain native rotation. The shared helper
   also serves the happy ghast's fallback look control, matching the original port.
+- Opt-in observers and target blocks send missing shape updates after resetting
+  power on placement or piston movement. The live state is reread after the write;
+  replacement blocks are not notified as the old block. Native scheduled-tick,
+  client-side and same-block guards and observer front notifications are retained.
+- Opt-in sponges notify neighbors when successful absorption changes them into
+  wet sponges. The native search, Purpur controls, event cancellation and snapshot
+  application remain unchanged. These three carpet-fixes ports default to false.
 
 Validation also exposed two inherited issues addressed in isolated patches:
 SNBT's grammar shared mutable empty lists/maps between separate parsed documents,
@@ -102,6 +109,9 @@ tintedpaper:
     note-block-place-powered: false
     fish-school-leader: true
     ghast-idle-direction: true
+    observer-place-shape-update: false
+    target-place-shape-update: false
+    sponge-absorb-update: false
 ```
 
 The old DPO plugin flags do not control these new native implementations. The
@@ -149,8 +159,8 @@ over the same native changes during rollout.
 The pre-existing patch 0315 for missing recipe references is preserved.
 New changes use applied-source Git commits, not edits to patch text:
 
-- Minecraft features 0316 through 0324.
-- Paper server regression/compatibility features 0069 through 0077.
+- Minecraft features 0316 through 0325.
+- Paper server regression/compatibility features 0069 through 0078.
 - Native TintedPaper configuration source
   `leaf-server/src/main/java/org/dreeam/leaf/config/modules/opt/DatapackOptimizations.java`.
 
@@ -207,20 +217,29 @@ freeze option, fish recruitment with and without leader protection, and ghast
 rotation for vertical-only movement, the horizontal threshold, attack targets and
 the disabled toggle. All three passed after complete patch reapplication.
 
+Three `BlockUpdatePortsTest` regressions cover the six shape notifications using
+the current state, native reset flags and observer notification order, replaced
+blocks and all native placement-reset guards, and sponge event acceptance versus
+cancellation with both toggle values. The sponge regression supplies a prepared
+removal snapshot and isolates the native event-to-wet-sponge path; it does not
+replace a full-world absorption test. All three passed after complete patch
+reapplication and the full local suite.
+
 After regenerating and fully reapplying the patches, this command succeeded:
 
 ```powershell
 .\gradlew.bat :leaf-server:test createLeafclipJar
 ```
 
-The resulting JUnit XML reports contain 10,187 cases: 10,101 passed, zero failed
+The resulting JUnit XML reports contain 10,190 cases: 10,104 passed, zero failed
 and 86 skipped. All twelve `DatapackPortsTest` and all four `ZipPackIndexTest`
-cases, plus all three `EntityAndPlacementPortsTest` cases, passed with no skips. The
+cases, plus all three `EntityAndPlacementPortsTest` and all three
+`BlockUpdatePortsTest` cases, passed with no skips. The
 existing Gradle exclusion for the `Slow` tag remains in effect.
 
 The current distribution artifact is
-`leaf-server/build/libs/leaf-leafclip-26.3.local-SNAPSHOT.jar` (28,355,302 bytes),
-SHA-256 `4445a981957824ac06cb47c83fdf98d142a951d01f74f71ec4d98596ac201967`.
+`leaf-server/build/libs/leaf-leafclip-26.3.local-SNAPSHOT.jar` (28,354,596 bytes),
+SHA-256 `14e78d7912286096cd7a3a737ad8e1fa2639e3ac1308e0a82c1c03cff1fc20f0`.
 It still uses inherited technical filenames and runtime identifiers. No server startup,
 production deployment, TPS/MSPT benchmark or gameplay integration test was run.
 
@@ -231,6 +250,9 @@ datapack compatibility separately before touching the 26.2 production world.
 For the entity/placement ports, check note placement beside powered redstone with
 the opt-in toggle both on and off, separate nearby fish schools, and idle/moving
 ghast and happy ghast rotation, including active look controls.
+For block updates, test powered observer/target piston placement next to observing
+blocks and sponge absorption with cancelling/modifying plugins, checking the
+opt-in settings both on and off in a disposable world.
 
 Next code groups: complete tag/type selector indexes and lifecycle verification;
 command/NBT preparation and caches; function profiler/throttles and timer ownership;

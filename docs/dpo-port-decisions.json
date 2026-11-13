@@ -4,9 +4,27 @@
     "fork": "3ab88076",
     "paper": "df120fd8b5211f61146a59f69497a5a62064b917",
     "dpo": "6bf15e3 plus preserved local recipe fixes",
-    "validation": "Owner authorized local compilation/tests on 2026-11-13. Patch generation and full reapplication succeeded. :leaf-server:test createLeafclipJar passed: JUnit XML totals 10187 cases, 10101 passed, 0 failed, 86 skipped, including all 12 DatapackPortsTest, 4 ZipPackIndexTest and 3 EntityAndPlacementPortsTest regressions. No runtime server, benchmark or production deployment."
+    "validation": "Owner authorized local compilation/tests on 2026-11-13. Patch generation and full reapplication succeeded. :leaf-server:test createLeafclipJar passed: JUnit XML totals 10190 cases, 10104 passed, 0 failed, 86 skipped, including all 12 DatapackPortsTest, 4 ZipPackIndexTest, 3 EntityAndPlacementPortsTest and 3 BlockUpdatePortsTest regressions. No runtime server, benchmark or production deployment."
   },
   "groups": [
+    {
+      "status": "native-behaviour-ported",
+      "reason": "ObserverBlock sends shape updates immediately after its native powered placement reset, before the original front-neighbor notifications. It rereads the current state and skips a replaced block. Native client, scheduled-tick and same-block gates remain unchanged. Independent native port of the source carpet-fixes behavior, default false.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/level/block/ObserverBlock.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/BlockUpdatePortsTest.java"],
+      "mixins": ["ObserverPlaceShapeUpdateMixin"]
+    },
+    {
+      "status": "native-behaviour-ported",
+      "reason": "TargetBlock sends shape updates immediately after its native powered placement reset using the current state only while the block is still a target. Native client, scheduled-tick and same-block gates and reset flags remain unchanged. Independent native port of the source carpet-fixes behavior, default false.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/level/block/TargetBlock.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/BlockUpdatePortsTest.java"],
+      "mixins": ["TargetPlaceShapeUpdateMixin"]
+    },
+    {
+      "status": "native-behaviour-ported",
+      "reason": "SpongeBlock optionally ORs UPDATE_NEIGHBORS into the existing wet-sponge write after successful absorption. Native breadth-first search, Purpur absorption controls, SpongeAbsorbEvent cancellation and snapshot application stay in place. Tests isolate the native event/snapshot-to-wet-sponge path. Independent native port of the source carpet-fixes behavior, default false.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/level/block/SpongeBlock.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/BlockUpdatePortsTest.java"],
+      "mixins": ["SpongeAbsorbUpdateMixin"]
+    },
     {
       "status": "native-behaviour-ported",
       "reason": "NoteBlock initializes POWERED from the placement position after native instrument selection when the opt-in toggle is enabled. Paper's disable-noteblock-updates early return remains authoritative. Default remains false, matching the source carpet-fixes port.",

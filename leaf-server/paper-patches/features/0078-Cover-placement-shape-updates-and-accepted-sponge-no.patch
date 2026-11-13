@@ -1,0 +1,174 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 08:57:06 -0300
+Subject: [PATCH] Cover placement shape updates and accepted sponge
+ notifications
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/BlockUpdatePortsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/BlockUpdatePortsTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..9bff162865cfc9b9ad306e78a0c9e339851fa670
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/BlockUpdatePortsTest.java
+@@ -0,0 +1,161 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.util.ArrayList;
++import java.util.List;
++import net.minecraft.core.BlockPos;
++import net.minecraft.core.Direction;
++import net.minecraft.world.flag.FeatureFlagSet;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.block.Block;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.ObserverBlock;
++import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.block.state.properties.BlockStateProperties;
++import net.minecraft.world.level.material.Fluids;
++import org.bukkit.craftbukkit.block.CraftBlock;
++import org.bukkit.craftbukkit.block.CraftBlockState;
++import org.bukkit.craftbukkit.util.BlockStateListPopulator;
++import org.bukkit.event.block.SpongeAbsorbEvent;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.opt.DatapackOptimizations;
++import org.junit.jupiter.api.Test;
++import org.mockito.MockedConstruction;
++import org.mockito.MockedStatic;
++import org.purpurmc.purpur.PurpurWorldConfig;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class BlockUpdatePortsTest {
++    private static final BlockPos POS = new BlockPos(3, 50, 7);
++
++    private record ShapeUpdate(Direction direction, BlockPos target, BlockState state, int flags, int limit) {}
++
++    @Test
++    void placementShapeUpdatesUseCurrentStateAndPreserveNativeWriteFlags() {
++        boolean observer = DatapackOptimizations.observerPlaceShapeUpdate;
++        boolean target = DatapackOptimizations.targetPlaceShapeUpdate;
++        try {
++            for (boolean enabled : new boolean[] {false, true}) {
++                DatapackOptimizations.observerPlaceShapeUpdate = enabled;
++                DatapackOptimizations.targetPlaceShapeUpdate = enabled;
++                for (Block block : new Block[] {Blocks.OBSERVER, Blocks.TARGET}) {
++                    Level level = level();
++                    BlockState powered = powered(block);
++                    BlockState reset = block.defaultBlockState();
++                    BlockState current = block == Blocks.OBSERVER
++                        ? reset.setValue(ObserverBlock.FACING, Direction.WEST)
++                        : reset.setValue(BlockStateProperties.POWER, 7);
++                    when(level.getBlockState(POS)).thenReturn(current);
++                    List<ShapeUpdate> updates = new ArrayList<>();
++                    doAnswer(call -> {
++                        assertEquals(POS, call.getArgument(2));
++                        updates.add(new ShapeUpdate(call.getArgument(0), ((BlockPos) call.getArgument(1)).immutable(),
++                            call.getArgument(3), call.getArgument(4), call.getArgument(5)));
++                        return null;
++                    }).when(level).neighborShapeChanged(any(), any(), any(), any(), anyInt(), anyInt());
++                    powered.onPlace(level, POS, Blocks.AIR.defaultBlockState(), true);
++                    var order = inOrder(level);
++                    order.verify(level).setBlock(POS, reset, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
++                    if (enabled) {
++                        order.verify(level).getBlockState(POS);
++                        order.verify(level, times(6)).neighborShapeChanged(any(), any(), eq(POS), eq(current), eq(Block.UPDATE_CLIENTS), eq(Block.UPDATE_LIMIT));
++                    } else {
++                        verify(level, never()).getBlockState(POS);
++                    }
++                    assertEquals(enabled ? 6 : 0, updates.size());
++                    for (Direction direction : Direction.values()) {
++                        if (enabled) assertTrue(updates.contains(new ShapeUpdate(direction.getOpposite(), POS.relative(direction), current, Block.UPDATE_CLIENTS, Block.UPDATE_LIMIT)));
++                    }
++                    if (block == Blocks.OBSERVER) {
++                        order.verify(level).neighborChanged(eq(POS.relative(Direction.NORTH)), eq(block), isNull());
++                    }
++                }
++            }
++        } finally {
++            DatapackOptimizations.observerPlaceShapeUpdate = observer;
++            DatapackOptimizations.targetPlaceShapeUpdate = target;
++        }
++    }
++
++    @Test
++    void placementDoesNotSendShapesForAReplacedBlockOrOutsideTheNativeReset() {
++        boolean observer = DatapackOptimizations.observerPlaceShapeUpdate;
++        boolean target = DatapackOptimizations.targetPlaceShapeUpdate;
++        try {
++            DatapackOptimizations.observerPlaceShapeUpdate = true;
++            DatapackOptimizations.targetPlaceShapeUpdate = true;
++            for (Block block : new Block[] {Blocks.OBSERVER, Blocks.TARGET}) {
++                Level replaced = level();
++                when(replaced.getBlockState(POS)).thenReturn(Blocks.STONE.defaultBlockState());
++                powered(block).onPlace(replaced, POS, Blocks.AIR.defaultBlockState(), false);
++                verify(replaced).setBlock(eq(POS), any(), anyInt());
++                verify(replaced, never()).neighborShapeChanged(any(), any(), any(), any(), anyInt(), anyInt());
++                for (int scenario = 0; scenario < 4; ++scenario) {
++                    Level level = level();
++                    when(level.isClientSide()).thenReturn(scenario == 0);
++                    when(level.getBlockTicks().hasScheduledTick(POS, block)).thenReturn(scenario == 1);
++                    BlockState state = scenario == 2 ? block.defaultBlockState() : powered(block);
++                    state.onPlace(level, POS, scenario == 3 ? block.defaultBlockState() : Blocks.AIR.defaultBlockState(), false);
++                    verify(level, never()).setBlock(any(), any(), anyInt());
++                    verify(level, never()).neighborShapeChanged(any(), any(), any(), any(), anyInt(), anyInt());
++                }
++            }
++        } finally {
++            DatapackOptimizations.observerPlaceShapeUpdate = observer;
++            DatapackOptimizations.targetPlaceShapeUpdate = target;
++        }
++    }
++
++    @Test
++    void spongeNotifiesOnlyAfterAcceptedAbsorptionAndHonorsItsToggle() throws Exception {
++        boolean previous = DatapackOptimizations.spongeAbsorbUpdate;
++        try {
++            for (boolean enabled : new boolean[] {false, true}) {
++                DatapackOptimizations.spongeAbsorbUpdate = enabled;
++                for (boolean accepted : new boolean[] {false, true}) {
++                    Level level = level();
++                    PurpurWorldConfig config = mock(PurpurWorldConfig.class);
++                    config.spongeAbsorptionRadius = 0;
++                    config.spongeAbsorptionArea = 1;
++                    java.lang.reflect.Field field = Level.class.getField("purpurConfig");
++                    field.setAccessible(true);
++                    field.set(level, config);
++                    CraftBlockState snapshot = mock(CraftBlockState.class);
++                    when(snapshot.getPosition()).thenReturn(POS.above());
++                    when(level.getBlockState(POS.above())).thenReturn(Blocks.WATER.defaultBlockState());
++                    when(level.getFluidState(POS.above())).thenReturn(Fluids.WATER.defaultFluidState());
++                    // Supply a prepared removal snapshot; exercise the native event-to-wet-sponge path.
++                    try (MockedStatic<CraftBlock> blocks = mockStatic(CraftBlock.class);
++                         MockedConstruction<BlockStateListPopulator> lists = mockConstruction(BlockStateListPopulator.class,
++                             (list, context) -> when(list.getSnapshotBlocks()).thenReturn(List.of(snapshot)));
++                         MockedConstruction<SpongeAbsorbEvent> events = mockConstruction(SpongeAbsorbEvent.class,
++                             (event, context) -> when(event.callEvent()).thenReturn(accepted))) {
++                        blocks.when(() -> CraftBlock.at(level, POS)).thenReturn(mock(CraftBlock.class));
++                        Blocks.SPONGE.defaultBlockState().onPlace(level, POS, Blocks.AIR.defaultBlockState(), false);
++                        assertEquals(1, events.constructed().size());
++                        verify(events.constructed().getFirst()).callEvent();
++                        verify(snapshot, times(accepted ? 1 : 0)).place(anyInt());
++                        verify(level, times(accepted ? 1 : 0)).setBlock(POS, Blocks.WET_SPONGE.defaultBlockState(),
++                            enabled ? Block.UPDATE_ALL : Block.UPDATE_CLIENTS);
++                        if (!accepted) verify(level, never()).setBlock(any(), any(), anyInt());
++                    }
++                }
++            }
++        } finally {
++            DatapackOptimizations.spongeAbsorbUpdate = previous;
++        }
++    }
++
++    private static Level level() {
++        Level level = mock(Level.class, RETURNS_DEEP_STUBS);
++        when(level.enabledFeatures()).thenReturn(FeatureFlagSet.of());
++        return level;
++    }
++
++    private static BlockState powered(Block block) {
++        return block == Blocks.OBSERVER ? block.defaultBlockState().setValue(ObserverBlock.POWERED, true)
++            : block.defaultBlockState().setValue(BlockStateProperties.POWER, 15);
++    }
++}

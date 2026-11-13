@@ -15,6 +15,9 @@ public final class DatapackOptimizations extends ConfigModule {
     public static volatile boolean noteBlockPlacePowered = false;
     public static volatile boolean fishSchoolLeader = true;
     public static volatile boolean ghastIdleDirection = true;
+    public static volatile boolean observerPlaceShapeUpdate = false;
+    public static volatile boolean targetPlaceShapeUpdate = false;
+    public static volatile boolean spongeAbsorbUpdate = false;
 
     @Override
     public void onLoaded() {
@@ -42,5 +45,11 @@ public final class DatapackOptimizations extends ConfigModule {
             "Prevent existing fish school leaders from being recruited into another school.");
         ghastIdleDirection = globalConfig.getBoolean("tintedpaper.fixes.ghast-idle-direction", true,
             "Preserve idle ghast heading below 0.1 blocks per tick of horizontal movement, without an attack target.");
+        observerPlaceShapeUpdate = globalConfig.getBoolean("tintedpaper.fixes.observer-place-shape-update", false,
+            "Send shape updates after a powered observer resets on placement; changes redstone behavior.");
+        targetPlaceShapeUpdate = globalConfig.getBoolean("tintedpaper.fixes.target-place-shape-update", false,
+            "Send shape updates after a powered target resets on placement; changes redstone behavior.");
+        spongeAbsorbUpdate = globalConfig.getBoolean("tintedpaper.fixes.sponge-absorb-update", false,
+            "Notify neighbors when an accepted absorption turns a sponge wet; changes block-update behavior.");
     }
 }
