@@ -1,6 +1,6 @@
 # Contributing to TintedPaper
 
-TintedPaper is an AI-driven Paper fork. AI-assisted and human contributions follow the same requirements: explain the concrete problem, preserve supported behavior and provide relevant validation.
+TintedPaper is a personal AI-driven Paper fork maintained for a private Minecraft server. Contributions follow the same requirements: explain the concrete problem, preserve supported behavior and provide relevant validation. Patches remain copyrighted by their respective creators.
 
 ## Requirements
 
@@ -38,7 +38,7 @@ Report the commands and results actually observed. Distinguish compilation, regr
 
 ## Migration and compatibility
 
-Compare DatapackOptimizer ports with the pinned upstream implementation before adding code. Record whether the behavior was ported, is already covered, is inapplicable, or still needs investigation in the [migration inventory](docs/dpo-port-decisions.json).
+Compare incoming ports with the pinned upstream implementation before adding code. Record whether the behavior was ported, is already covered, is inapplicable, or still needs investigation in the [migration inventory](docs/dpo-port-decisions.json).
 
 Preserve error handling, configuration defaults, serialization, API contracts and world/entity ownership. Do not import a threading model from another fork without establishing compatibility. Add focused regressions for new nontrivial behavior.
 

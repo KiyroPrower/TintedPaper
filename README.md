@@ -1,45 +1,24 @@
 # TintedPaper
 
-**TintedPaper is an AI-driven Paper fork for Minecraft, focused on native datapack optimizations, performance, vanilla mechanics and stability.**
+**TintedPaper é um fork AI-driven do Paper, desenvolvido como projeto pessoal para um servidor privado de Minecraft.**
 
-[![Build TintedPaper](https://img.shields.io/github/actions/workflow/status/KiyroPrower/TintedPaper/build-263.yml?branch=ver%2F26.3&label=build)](https://github.com/KiyroPrower/TintedPaper/actions/workflows/build-263.yml)
-[![Minecraft 26.3](https://img.shields.io/badge/Minecraft-26.3-blue)](https://github.com/KiyroPrower/TintedPaper/tree/ver/26.3)
+As otimizações, correções e configurações são orientadas pelas necessidades desse servidor, com foco em desempenho, mecanismos do jogo e estabilidade. O projeto está em desenvolvimento e suas alterações passam por análise, testes de regressão e validação no ambiente de destino.
 
-**English** | [中文](public/readme/README_CN.md)
+## Versão e construção
 
-## AI-driven development
-
-AI agents, including Codex and Claude, participate in code analysis, implementation, upstream comparisons and regression testing. Changes remain subject to maintainer review and validation; AI involvement is not evidence of correctness or a measured performance gain.
-
-TintedPaper is migrating [DatapackOptimizer](https://github.com/KiyroPrower/DatapackOptimizer) from a plugin into native server patches. Each port is compared with the current server implementation so existing optimizations are reused and obsolete patches are excluded.
-
-## Current status
-
-- Target: Minecraft **26.3**, with **Java 25**.
-- Native ports cover scoreboard recovery, NBT parsing and traversal, selector predicates, packet holder sets, piston/path behavior and collision coordinate caches.
-- The DatapackOptimizer migration is **incomplete**. See the [migration report](docs/DPO-MIGRATION.md) and [decision inventory](docs/dpo-port-decisions.json) for validated work and outstanding modules.
-- Plugin and datapack compatibility, gameplay behavior and TPS/MSPT gains require runtime validation for the intended workload.
-
-## Builds and support
-
-- [Builds and artifacts](https://github.com/KiyroPrower/TintedPaper/actions/workflows/build-263.yml)
-- [Releases](https://github.com/KiyroPrower/TintedPaper/releases)
-- [Bug reports and feature requests](https://github.com/KiyroPrower/TintedPaper/issues)
-- [Contributing](CONTRIBUTING.md)
-
-CI uploads development artifacts. It does not automatically publish a stable release or deploy a server.
-
-## Build locally
+O alvo atual é Minecraft **26.3**, com **Java 25**.
 
 ```powershell
 .\gradlew.bat applyAllPatches
 .\gradlew.bat :leaf-server:test createLeafclipJar
 ```
 
-On Linux or macOS, use `./gradlew` instead of `.\gradlew.bat`. The inherited build task and module identifiers remain in use for patch-system compatibility. Distribution JARs are generated under `leaf-server/build/libs/`; CI names the downloadable artifact `tintedpaper-26.3`.
+Em Linux ou macOS, use `./gradlew` no lugar de `.\gradlew.bat`. Os nomes internos dos módulos e tarefas herdados são mantidos para compatibilidade com o sistema de patches. Os JARs são gerados em `leaf-server/build/libs/`.
 
-## License and upstream credits
+[Construções e artefatos](https://github.com/KiyroPrower/TintedPaper/actions/workflows/build-263.yml) · [Guia de contribuição](CONTRIBUTING.md)
 
-TintedPaper builds on [Paper](https://github.com/PaperMC/Paper), the [upstream implementation](https://github.com/Winds-Studio/Leaf), and contributions inherited from Gale, Pufferfish, Purpur, Moonrise, Lithium and other projects identified in patch headers. Their authorship and license notices remain intact.
+## Autoria e licenças
 
-See [LICENSE.md](LICENSE.md), the [license directory](licenses) and individual patch headers for the applicable terms. Renaming the project does not transfer authorship of upstream work.
+**Todos os patches continuam sendo de direito autoral de seus respectivos criadores.** Sua inclusão no TintedPaper não transfere a autoria nem a titularidade dessas contribuições. Os créditos, avisos de copyright e termos de licença originais permanecem aplicáveis.
+
+O projeto incorpora contribuições do Paper e de outras implementações, identificadas nos cabeçalhos dos patches. Consulte [LICENSE.md](LICENSE.md), o [diretório de licenças](licenses) e os avisos de cada patch para os termos correspondentes.

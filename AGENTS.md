@@ -2,7 +2,7 @@
 
 ## Project overview
 
-TintedPaper is an AI-driven Paper fork focused on native datapack optimizations, performance, vanilla mechanics and stability.
+TintedPaper is a personal AI-driven Paper fork maintained for a private Minecraft server, focused on performance, vanilla mechanics and stability. Patches remain copyrighted by their respective creators.
 
 ## Allowed scope
 
