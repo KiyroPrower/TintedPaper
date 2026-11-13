@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sun, 13 Jul 2025 20:03:51 +0300
+Subject: [PATCH] Remove unused packet watchdog bookkeeping
+
+DivineMC 0053 subset: retain the existing Leaf entity/connection changes. The current watchdog and owned sources do not consume these packet counters. Preserve packet error handling and fatal OutOfMemoryError propagation.
+
+diff --git a/net/minecraft/network/PacketProcessor.java b/net/minecraft/network/PacketProcessor.java
+index 408cb996fc8ff77785da8919f19baff2cf4bd789..0cb104f0144f110b58645dcd64c0cd6f0bdadf93 100644
+--- a/net/minecraft/network/PacketProcessor.java
++++ b/net/minecraft/network/PacketProcessor.java
+@@ -70,28 +70,8 @@ public class PacketProcessor implements AutoCloseable {
+         this.closed = true;
+     }
+ 
+-    // Paper start - detailed watchdog information
+-    public static final java.util.concurrent.ConcurrentLinkedDeque<PacketListener> packetProcessing = new java.util.concurrent.ConcurrentLinkedDeque<>();
+-    static final java.util.concurrent.atomic.AtomicLong totalMainThreadPacketsProcessed = new java.util.concurrent.atomic.AtomicLong();
+-
+-    public static long getTotalProcessedPackets() {
+-        return totalMainThreadPacketsProcessed.get();
+-    }
+-
+-    public static java.util.List<PacketListener> getCurrentPacketProcessors() {
+-        java.util.List<PacketListener> listeners = new java.util.ArrayList<>(4);
+-        for (PacketListener listener : packetProcessing) {
+-            listeners.add(listener);
+-        }
+-
+-        return listeners;
+-    }
+-    // Paper end - detailed watchdog information
+-
+     private record ListenerAndPacket<T extends PacketListener>(T listener, Packet<T> packet) {
+         public void handle() {
+-            packetProcessing.push(this.listener); // Paper - detailed watchdog information
+-            try { // Paper - detailed watchdog information
+             if (this.listener.shouldHandleMessage(this.packet)) {
+                 try {
+                     this.packet.handle(this.listener);
+@@ -105,12 +85,6 @@ public class PacketProcessor implements AutoCloseable {
+             } else {
+                 PacketProcessor.LOGGER.debug("Ignoring packet due to disconnection: {}", this.packet);
+             }
+-            // Paper start - detailed watchdog information
+-            } finally {
+-                totalMainThreadPacketsProcessed.getAndIncrement();
+-                packetProcessing.pop();
+-            }
+-            // Paper end - detailed watchdog information
+         }
+     }
+ }

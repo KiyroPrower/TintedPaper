@@ -1,0 +1,29 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Wed, 11 Jun 2025 19:12:00 +0300
+Subject: [PATCH] Reduce chunk loading & lookups
+
+Original license: GPL v3
+Original project: https://github.com/pufferfish-gg/Pufferfish
+
+diff --git a/net/minecraft/world/entity/LivingEntity.java b/net/minecraft/world/entity/LivingEntity.java
+index e1a8bed3e9489ea579fc10e9c2f45e77b2521b7c..25f0a11de31e23c884da19b12f28be16d660fbac 100644
+--- a/net/minecraft/world/entity/LivingEntity.java
++++ b/net/minecraft/world/entity/LivingEntity.java
+@@ -4750,10 +4750,14 @@ public abstract class LivingEntity extends Entity implements Attackable, Waypoin
+         WorldBorder worldBorder = level.getWorldBorder();
+         Vec3 clamped = worldBorder.clampVec3ToBound(xx, y, zz);
+         BlockPos.MutableBlockPos pos = BlockPos.containing(clamped).mutable();
+-        if (level.hasChunkAt(pos)) {
++        // DivineMC start - Reduce chunk loading & lookups
++        final net.minecraft.world.level.chunk.@org.jspecify.annotations.Nullable LevelChunk chunk = org.dreeam.leaf.config.modules.opt.OptimizeRandomTeleport.enabled && !level.captureTreeGeneration ? level.getChunkIfLoaded(pos) : null;
++        if (chunk != null || level.hasChunkAt(pos)) {
+             while (pos.getY() > level.getMinY()) {
+                 pos.move(Direction.DOWN);
+-                BlockState state = level.getBlockState(pos);
++                // Preserve captured tree states and the world's out-of-bounds VOID_AIR result.
++                BlockState state = chunk != null && level.isInValidBounds(pos) ? chunk.getBlockState(pos) : level.getBlockState(pos);
++                // DivineMC end - Reduce chunk loading & lookups
+                 if (state.is(BlockTags.ENTITIES_CAN_TELEPORT_TO)) {
+                     return this.checkPositionAndTeleport(clamped.x, y, clamped.z, showParticles, isInvalidPosition, state, level, cause); // Paper - teleport cause API
+                 }

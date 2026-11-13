@@ -11,6 +11,20 @@
   },
   "decisions": [
     {
+      "source": "divinemc-server/minecraft-patches/features/0053-Cleanup-dead-code-from-Paper.patch",
+      "status": "ported-missing-subset",
+      "reason": "Keep the inherited Leaf entity movement and Connection changes. Port only the remaining unused PacketProcessor watchdog deque/counter instrumentation; current native, applied Paper and owned server sources do not consume its diagnostic accessors. Packet filtering, exception reporting, fatal Error propagation and shutdown rejection stay intact.",
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/network/PacketProcessor.java", "paper-server/src/main/java/org/spigotmc/WatchdogThread.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivinePacketProcessingTest.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0022-Reduce-chunk-loading-lookups.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Reuse the already loaded chunk during the downward scan shared by endermen, cats and random-teleport consumables. Preserve captured tree-generation block states by using the world path during capture, and preserve world bounds/VOID_AIR before reading directly from the chunk. The original teleport validation, collision checks, plugin events and causes remain unchanged.",
+      "config": "performance.reduce-chunk-load-and-lookup",
+      "default": true,
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/entity/LivingEntity.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/Level.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineRandomTeleportTest.java"]
+    },
+    {
       "source": "divinemc-server/minecraft-patches/features/0054-C2ME-The-End-Biome-Cache.patch",
       "status": "ported-with-adaptations",
       "reason": "Preserve the opt-in bounded per-thread cache, scoped to each resolver/sampler instead of sharing results across samplers. Include Y in the key because 26.3 erosion sampling uses blockY. Unpackable coordinates bypass caching. Enforce capacities from 1 to 65536 even for runtime changes; capacities below 16 no longer disable eviction.",

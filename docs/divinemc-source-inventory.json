@@ -1,0 +1,873 @@
+{
+  "sourceCommit": "a02492aa29a22f98066fd2a7ac946f310b6f9ece",
+  "status": "in-progress",
+  "meaning": "Complete path inventory of active patch trees and module-owned src files at the recorded commit; filenames and pending status are not semantic verification or a claim that every supporting file needs copying. Historical removed patches and Git/build caches are excluded.",
+  "counts": {
+    "patches": 150,
+    "patchesWithDecision": 20,
+    "patchesPendingReview": 130,
+    "supportingSourceAndResourceFiles": 258
+  },
+  "patches": [
+    {
+      "source": "divinemc-api/build.gradle.kts.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0001-Rebrand.patch",
+      "status": "project-specific"
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0002-Delete-Timings.patch",
+      "status": "covered-by-base"
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0003-Delete-ReloadCommand.patch",
+      "status": "requires-compatibility-adaptation"
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0004-Expanded-Adventure-support.patch",
+      "status": "ported"
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0005-Extend-Location-API.patch",
+      "status": "ported"
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0006-Extend-Sound-API.patch",
+      "status": "ported"
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0007-Pufferfish-Sentry.patch",
+      "status": "covered-by-base"
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0008-Paper-PR-Player-standing-on-position-API.patch",
+      "status": "ported"
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0009-SparklyPaper-Parallel-world-ticking.patch",
+      "status": "covered-by-base"
+    },
+    {
+      "source": "divinemc-api/paper-patches/files/.checkstyle/ignored_directories.txt.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/build.gradle.kts.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0001-Rebrand.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0002-Configuration.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0003-Option-to-disable-method-profiler.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0004-Paper-PR-Add-FillBottleEvents-for-player-and-dispens.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0005-Paper-PR-Throttle-failed-spawn-attempts.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0006-Raytrace-AntiXray-SDK-integration.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0007-Paper-PR-Add-ticket-on-player-join-to-avoid-chunk-lo.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0008-lithium-fast_util.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0009-C2ME-Optimize-world-gen-math.patch",
+      "status": "no-effective-change"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0010-Async-locate-command.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0011-Carpet-Fixes-RecipeManager-Optimize.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0012-Disable-leaf-decay.patch",
+      "status": "ported-with-adaptations"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0013-Optimize-entities.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0014-SparklyPaper-Skip-distanceToSqr-call-in-ServerEntity.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0015-Carpet-Fixes-Optimized-getBiome-method.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0016-Carpet-Fixes-Sheep-Optimization.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0017-ModernFix-compact_bit_storage.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0018-Option-to-disable-disconnect.spam.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0019-Option-to-disable-saving-of-snowball-and-firework.patch",
+      "status": "ported-with-adaptations"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0020-Snowball-and-Egg-knockback.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0021-Optimize-suffocation.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0022-Reduce-chunk-loading-lookups.patch",
+      "status": "ported-with-adaptations"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0023-Configurable-movement-speed-for-entities.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0024-Option-to-allow-weird-movement-and-disable-teleporti.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0025-Optimize-Raids.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0026-Optimize-VarInt-and-VarLong-write.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0027-Optimize-Fluids.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0028-Optimize-Structure-Generation.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0029-Implement-NoChatReports.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0030-Lag-compensation.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0031-Virtual-Threads.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0032-Async-Chunk-Sending.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0033-Command-block-parse-results-caching.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0034-Player-ProfileResult-caching.patch",
+      "status": "requires-redesign"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0035-Implement-Secure-Seed.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0036-Dynamic-Activation-of-Brain.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0037-Petal-Async-Pathfinding.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0038-Parallel-entity-tracker.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0039-Pufferfish-Optimize-mob-spawning.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0040-Pufferfish-Simpler-ShapelessRecipes-comparison-for-V.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0041-Clump-experience-orbs.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0042-SparklyPaper-Parallel-world-ticking.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0043-MSPT-Tracking-for-each-world.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0044-Catch-update-suppressors.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0045-Regionized-Chunk-Ticking.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0046-C2ME-Limit-NBT-cache.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0047-C2ME-Optimize-Aquifer-and-Beardifier.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0048-Copper-Bulb-1gt-delay.patch",
+      "status": "ported-with-adaptations"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0049-Crafter-1gt-delay.patch",
+      "status": "ported-with-adaptations"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0050-Leaves-Protocol-Core.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0051-Paper-PR-Optimise-non-flush-packet-sending.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0052-Linear-region-file-format.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0053-Cleanup-dead-code-from-Paper.patch",
+      "status": "ported-missing-subset"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0054-C2ME-The-End-Biome-Cache.patch",
+      "status": "ported-with-adaptations"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0055-Do-not-send-spectator-change-packet.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0056-Paper-PR-Fire-ServerListPingEvent-for-secondary-motd.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0057-Configurable-player-spawn-tracking-range.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0058-Optimize-Moonrise.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0059-lithium-combined_heightmap_update.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0060-lithium-sleeping_block_entity.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0061-lithium-equipment_tracking.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0062-Configurable-Files-Locations.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0063-Pufferfish-Make-EntityCollisionContext-a-live-repres.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0064-Pufferfish-Optimize-random-calls-in-chunk-ticking.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0065-Pufferfish-Reduce-projectile-chunk-loading.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0066-C2ME-native-math-optimization.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0067-Parallel-sensor-phase.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0068-Raytrace-Entity-Culling.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0069-Fix-MC-73719.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/alternate/current/wire/UpdateOrder.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/alternate/current/wire/WireHandler.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/io/papermc/paper/command/subcommands/FixLightCommand.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/advancements/Advancement.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/core/BlockPos.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/core/NonNullList.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/MinecraftServer.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/PlayerAdvancements.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/dedicated/DedicatedServer.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/level/ChunkMap.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/level/ServerChunkCache.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/level/ServerLevel.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/level/ServerPlayer.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/network/ServerGamePacketListenerImpl.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/network/ServerStatusPacketListenerImpl.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/players/PlayerList.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/rcon/RconConsoleSource.java.patch",
+      "status": "ported-with-adaptations"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/stats/ServerStatsCounter.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/Entity.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/LivingEntity.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/Mob.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/ai/goal/target/HurtByTargetGoal.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/ai/navigation/WallClimberNavigation.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/ai/sensing/SecondaryPoiSensor.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/monster/zombie/ZombieVillager.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/player/Player.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/entity/raid/Raid.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/Level.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/LocalMobCapCalculator.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/block/TripWireHookBlock.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/block/entity/BlockEntity.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/block/entity/HopperBlockEntity.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/chunk/LevelChunk.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/levelgen/feature/OreFeature.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/levelgen/material/condition/SteepCondition.java.patch",
+      "status": "ported-with-adaptations"
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/saveddata/maps/MapItemSavedData.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0001-Rebrand.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0002-Configuration.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0003-Delete-timings.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0004-Delete-ReloadCommand.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0005-Paper-PR-Add-FillBottleEvents-for-player-and-dispens.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0006-Paper-PR-Player-standing-on-position-API.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0007-Paper-PR-Throttle-failed-spawn-attempts.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0008-Optimize-default-values-for-configs.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0009-Configurable-files-locations-and-plugin-loading.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0010-SparklyPaper-Optimize-canSee-checks.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0011-Virtual-Threads.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0012-Implement-Secure-Seed.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0013-Pufferfish-Optimize-mob-spawning.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0014-Pufferfish-Simpler-ShapelessRecipes-comparison-for-V.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0015-SparklyPaper-Parallel-world-ticking.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0016-Leaves-Protocol-Core.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0017-Paper-PR-Fire-ServerListPingEvent-for-secondary-motd.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0018-Optimize-Moonrise.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0019-Implement-chunk-system-algorithm.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0020-Regionized-Chunk-Ticking.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/files/.checkstyle/checkstyle.xml.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/files/.checkstyle/ignored_directories.txt.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/files/src/main/java/ca/spottedleaf/moonrise/common/util/MoonriseConstants.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/files/src/main/java/org/bukkit/craftbukkit/CraftServer.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/files/src/main/java/org/bukkit/craftbukkit/block/CraftBlock.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/files/src/main/java/org/bukkit/craftbukkit/block/CraftBlockStates.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/files/src/main/java/org/bukkit/craftbukkit/command/CraftCommandMap.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/paper-patches/files/src/test/java/org/bukkit/craftbukkit/legacy/MaterialReroutingTest.java.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/purpur-patches/features/0001-Update-Purpur-rebrand-settings.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/purpur-patches/features/0002-Add-missing-purpur-config-options.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/purpur-patches/features/0003-Optimize-default-values-for-configs.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/purpur-patches/features/0004-Configurable-movement-speed-for-entities.patch",
+      "status": "pending-review"
+    },
+    {
+      "source": "divinemc-server/purpur-patches/features/0005-MSPT-Tracking-for-each-world.patch",
+      "status": "pending-review"
+    }
+  ],
+  "supportingSourceAndResourceFiles": [
+    "divinemc-api/src/main/java/dev/imanity/antixray/sdk/AntiXrayAdapter.java",
+    "divinemc-api/src/main/java/dev/imanity/antixray/sdk/AntiXraySDK.java",
+    "divinemc-api/src/main/java/dev/imanity/antixray/sdk/package-info.java",
+    "divinemc-api/src/main/java/gg/pufferfish/pufferfish/sentry/SentryContext.java",
+    "divinemc-api/src/main/java/gg/pufferfish/pufferfish/sentry/package-info.java",
+    "divinemc-api/src/main/java/gg/pufferfish/pufferfish/simd/SIMDChecker.java",
+    "divinemc-api/src/main/java/gg/pufferfish/pufferfish/simd/SIMDDetection.java",
+    "divinemc-api/src/main/java/gg/pufferfish/pufferfish/simd/package-info.java",
+    "divinemc-api/src/main/java/io/papermc/paper/event/block/BlockFillBottleEvent.java",
+    "divinemc-api/src/main/java/io/papermc/paper/event/player/PlayerFillBottleEvent.java",
+    "divinemc-server/src/c/CMakeLists.txt",
+    "divinemc-server/src/c/exports.c",
+    "divinemc-server/src/c/exports_x86_64_avx.c",
+    "divinemc-server/src/c/exports_x86_64_avx10_2dmr.c",
+    "divinemc-server/src/c/exports_x86_64_avx10_2nvl.c",
+    "divinemc-server/src/c/exports_x86_64_avx2.c",
+    "divinemc-server/src/c/exports_x86_64_avx2vnni.c",
+    "divinemc-server/src/c/exports_x86_64_avx512icl.c",
+    "divinemc-server/src/c/exports_x86_64_avx512skx.c",
+    "divinemc-server/src/c/exports_x86_64_avx512spr.c",
+    "divinemc-server/src/c/exports_x86_64_sse2.c",
+    "divinemc-server/src/c/exports_x86_64_sse4_2.c",
+    "divinemc-server/src/c/flibc.c",
+    "divinemc-server/src/c/includes/FastNoiseLite.h",
+    "divinemc-server/src/c/includes/ext_math.h",
+    "divinemc-server/src/c/includes/target_macros.h",
+    "divinemc-server/src/c/system_isa_aarch64.c",
+    "divinemc-server/src/c/system_isa_x86_64.c",
+    "divinemc-server/src/c/targets/darwin-x86_64.cmake",
+    "divinemc-server/src/c/targets/linux-aarch_64.cmake",
+    "divinemc-server/src/c/targets/linux-x86_64.cmake",
+    "divinemc-server/src/c/targets/windows-x86_64.cmake",
+    "divinemc-server/src/main/java/com/ishland/c2me/opts/worldgen/general/common/random_instances/RandomUtils.java",
+    "divinemc-server/src/main/java/com/ishland/flowsched/util/Assertions.java",
+    "divinemc-server/src/main/java/com/logisticscraft/occlusionculling/DataProvider.java",
+    "divinemc-server/src/main/java/com/logisticscraft/occlusionculling/OcclusionCullingInstance.java",
+    "divinemc-server/src/main/java/com/logisticscraft/occlusionculling/cache/ArrayOcclusionCache.java",
+    "divinemc-server/src/main/java/com/logisticscraft/occlusionculling/cache/OcclusionCache.java",
+    "divinemc-server/src/main/java/com/logisticscraft/occlusionculling/util/MathUtilities.java",
+    "divinemc-server/src/main/java/com/logisticscraft/occlusionculling/util/Vec3d.java",
+    "divinemc-server/src/main/java/gg/pufferfish/pufferfish/sentry/PufferfishSentryAppender.java",
+    "divinemc-server/src/main/java/gg/pufferfish/pufferfish/sentry/SentryManager.java",
+    "divinemc-server/src/main/java/gg/pufferfish/pufferfish/util/AsyncExecutor.java",
+    "divinemc-server/src/main/java/gg/pufferfish/pufferfish/util/IterableWrapper.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/api/inventory/LithiumCooldownReceivingInventory.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/api/inventory/LithiumDefaultedList.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/api/inventory/LithiumInventory.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/api/inventory/LithiumTransferConditionInventory.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/block/entity/SetBlockStateHandlingBlockEntity.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/block/entity/SetChangedHandlingBlockEntity.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/block/entity/ShapeUpdateHandlingBlockBehaviour.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/block/entity/SleepUntilTimeBlockEntityTickInvoker.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/block/entity/SleepingBlockEntity.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/block/entity/inventory_change_tracking/InventoryChangeEmitter.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/block/entity/inventory_change_tracking/InventoryChangeListener.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/block/entity/inventory_change_tracking/InventoryChangeTracker.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/block/entity/inventory_comparator_tracking/ComparatorTracker.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/block/entity/inventory_comparator_tracking/ComparatorTracking.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/hopper/BlockStateOnlyInventory.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/hopper/ComparatorUpdatePattern.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/hopper/HopperCachingState.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/hopper/HopperHelper.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/hopper/InventoryHelper.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/hopper/LithiumDoubleInventory.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/hopper/LithiumDoubleStackList.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/hopper/LithiumStackList.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/hopper/UpdateReceiver.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/tracking/entity/ChunkSectionEntityMovementListener.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/tracking/entity/ChunkSectionEntityMovementTracker.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/tracking/entity/ChunkSectionInventoryEntityTracker.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/tracking/entity/ChunkSectionItemEntityMovementTracker.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/util/DirectionConstants.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/util/change_tracking/ChangePublisher.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/util/change_tracking/ChangeSubscriber.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/util/math/CompactSineLUT.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/util/tuples/WorldSectionBox.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/world/WorldHelper.java",
+    "divinemc-server/src/main/java/net/caffeinemc/mods/lithium/common/world/chunk/heightmap/CombinedHeightmapUpdate.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/DivineHooks.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/DivineVersionFetcher.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/AsyncChunkSend.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/ExecutorShutdown.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/pathfinding/AsyncPath.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/pathfinding/NodeEvaluatorCache.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/pathfinding/NodeEvaluatorFeatures.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/pathfinding/NodeEvaluatorGenerator.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/pathfinding/NodeEvaluatorType.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/pathfinding/PathfindTaskRejectPolicy.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/rct/AvgTimeLogger.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/rct/RegionizedChunkTicking.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/rct/RollingLongBuffer.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/rct/UnionFind.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/sensing/ParallelSensorTicker.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/tracking/ParallelEntityTracker.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/world/PortalSearchPrefetcher.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/world/ServerLevelTickThreadFactory.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/async/world/TeleportState.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/chunk/ChunkSystemAlgorithm.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/command/DivineCommand.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/command/DivineCommands.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/command/DivineSubCommand.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/command/DivineSubCommandPermission.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/command/subcommands/MSPTCommand.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/command/subcommands/ReloadCommand.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/command/subcommands/TickTimes.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/command/subcommands/VersionCommand.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/config/ConfigCategory.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/config/DivineConfig.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/config/DivineWorldConfig.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/config/annotations/Experimental.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/culling/CullingDataProvider.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/culling/EntityCullingManager.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/culling/PlayerCullTracker.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/math/Bindings.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/math/BindingsTemplate.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/math/ISATarget.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/math/NativeLoader.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/math/isa/ISA_aarch64.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/math/isa/ISA_x86_64.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/EnumRegionFileExtension.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/Flusher.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/IRegionCreateFunction.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/IRegionFile.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/RegionFileInfo.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/buffered/BufferedRegionFile.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/buffered/BufferedRegionFileFlusher.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/linear/LinearBase.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/linear/LinearImplementation.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/linear/LinearRegionFile.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/linear/LinearRegionFileFlusher.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/linear/V2LinearBase.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/linear/versions/V1Linear.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/linear/versions/V2Linear.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/linear/versions/V3Linear.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/region/linear/versions/Version.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/spark/DivineServerConfigProvider.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/spark/DivineSparkPlugin.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/spark/ThreadDumperRegistry.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/Codecs.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/CollectionWrapperUtil.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/MemoryUtil.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/NamedAgnosticThreadFactory.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/NamedAgnosticThreadFactoryAffinity.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/cache/CachedOrNewBitsGetter.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/cache/IterateOutwardsCache.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/cache/LongList2BlockPosMutableIterable.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/collections/LongJumpChoiceList.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/collections/MaskedList.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/collections/PlatformCollections.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/entity/SensorHelper.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/exception/UpdateSuppressorException.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/map/Int2ObjectConcurrentHashMap.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/structure/BoxOctree.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/structure/GeneralUtils.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/structure/PalettedStructureBlockInfoList.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/structure/PalettedStructureBlockInfoListIterator.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/structure/StructureTemplateOptimizer.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/structure/TrojanArrayList.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/structure/TrojanVoxelShape.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/tps/TPSCalculator.java",
+    "divinemc-server/src/main/java/org/bxteam/divinemc/util/tps/TPSUtil.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/LeavesLogger.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/AppleSkinProtocol.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/XaeroMapProtocol.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/Context.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/IdentifierSelector.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/LeavesCustomPayload.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/LeavesProtocol.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/LeavesProtocolManager.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/ProtocolHandler.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/ProtocolUtils.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/invoker/AbstractInvokerHolder.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/invoker/BytebufReceiverInvokerHolder.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/invoker/EmptyInvokerHolder.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/invoker/InitInvokerHolder.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/invoker/MinecraftRegisterInvokerHolder.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/invoker/PayloadReceiverInvokerHolder.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/core/invoker/PlayerInvokerHolder.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/JadeProtocol.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/accessor/Accessor.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/accessor/BlockAccessor.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/accessor/EntityAccessor.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/payload/ClientHandshakePayload.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/payload/ReceiveDataPayload.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/payload/RequestBlockPayload.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/payload/RequestEntityPayload.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/payload/ServerHandshakePayload.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/ItemStorageExtensionProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/ItemStorageProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/JadeProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/ServerDataProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/ServerExtensionProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/StreamServerDataProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/BeehiveProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/BlockNameProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/BrewingStandProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/CampfireProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/ChiseledBookshelfProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/CommandBlockProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/FurnaceProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/HopperLockProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/JukeboxProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/LecternProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/MobSpawnerCooldownProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/block/RedstoneProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/entity/AnimalOwnerProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/entity/MobBreedingProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/entity/MobGrowthProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/entity/NextEntityDropProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/entity/PetArmorProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/entity/StatusEffectsProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/provider/entity/ZombieVillagerProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/tool/ShearsToolHandler.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/CommonUtil.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/HierarchyLookup.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/IHierarchyLookup.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/ItemCollector.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/ItemIterator.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/JadeCodec.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/LootTableMineableCollector.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/PairHierarchyLookup.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/PriorityStore.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/ViewGroup.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/jade/util/WrappedHierarchyLookup.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/CommunicationManager.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/Feature.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/FeatureSet.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/FileStorage.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/LocalLitematicState.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/MessageType.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/PacketType.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/PlayerIdentifier.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/PlayerIdentifierProvider.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/ServerPlacement.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/ServerPosition.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/SubRegionData.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/SubRegionPlacementModification.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/SyncmaticManager.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/SyncmaticaPayload.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/SyncmaticaProtocol.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/exchange/AbstractExchange.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/exchange/DownloadExchange.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/exchange/Exchange.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/exchange/ExchangeTarget.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/exchange/FeatureExchange.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/exchange/ModifyExchangeServer.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/exchange/UploadExchange.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/protocol/syncmatica/exchange/VersionHandshakeServer.java",
+    "divinemc-server/src/main/java/org/leavesmc/leaves/util/NbtUtils.java",
+    "divinemc-server/src/main/java/su/plo/matter/Globals.java",
+    "divinemc-server/src/main/java/su/plo/matter/HashingVersion.java",
+    "divinemc-server/src/main/java/su/plo/matter/WorldgenCryptoRandom.java",
+    "divinemc-server/src/main/java/su/plo/matter/hashing/HashingBlake2b.java",
+    "divinemc-server/src/main/java/su/plo/matter/hashing/HashingBlake3.java",
+    "divinemc-server/src/main/resources/linux-x86_64-libc2me-opts-natives-math.so",
+    "divinemc-server/src/main/resources/windows-x86_64-c2me-opts-natives-math.dll",
+    "divinemc-server/src/test/java/org/bxteam/divinemc/DivineMCTestSuite.java",
+    "divinemc-server/src/test/java/org/bxteam/divinemc/math/NativeMathParityTest.java"
+  ]
+}
