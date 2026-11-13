@@ -1,0 +1,190 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 15:45:13 -0300
+Subject: [PATCH] Test optional block timings and foliage decay
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineBlockMechanicsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineBlockMechanicsTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..d2a44b7d836fd2e0a199d95c7d51b0e8ca24f558
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineBlockMechanicsTest.java
+@@ -0,0 +1,178 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.util.concurrent.atomic.AtomicReference;
++import net.minecraft.core.BlockPos;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.util.RandomSource;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.block.Block;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.CrafterBlock;
++import net.minecraft.world.level.block.LeavesBlock;
++import net.minecraft.world.level.block.state.BlockState;
++import org.bukkit.craftbukkit.CraftServer;
++import org.bukkit.craftbukkit.event.CraftEventFactory;
++import org.bukkit.event.block.LeavesDecayEvent;
++import org.bukkit.plugin.PluginManager;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.gameplay.BlockMechanics;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.purpurmc.purpur.PurpurWorldConfig;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DivineBlockMechanicsTest {
++    private static final BlockPos POS = new BlockPos(1, 64, 2);
++    private boolean bulb;
++    private boolean crafter;
++    private boolean decay;
++
++    @BeforeEach
++    void saveSettings() {
++        this.bulb = BlockMechanics.copperBulbOneTickDelay;
++        this.crafter = BlockMechanics.crafterOneTickDelay;
++        this.decay = BlockMechanics.disableLeafDecay;
++        BlockMechanics.copperBulbOneTickDelay = false;
++        BlockMechanics.crafterOneTickDelay = false;
++        BlockMechanics.disableLeafDecay = false;
++    }
++
++    @AfterEach
++    void restoreSettings() {
++        BlockMechanics.copperBulbOneTickDelay = this.bulb;
++        BlockMechanics.crafterOneTickDelay = this.crafter;
++        BlockMechanics.disableLeafDecay = this.decay;
++    }
++
++    @Test
++    void copperBulbDelayHonorsQueuedTicksAndPaperCancellation() {
++        for (Block bulb : Blocks.COPPER_BULB.asList()) {
++            ServerLevel level = mock(ServerLevel.class);
++            BlockState state = bulb.defaultBlockState();
++            state.onPlace(level, POS, Blocks.AIR.defaultBlockState(), false);
++            state.handleNeighborChanged(level, POS, Blocks.STONE, null, false);
++            verify(level, times(2)).hasNeighborSignal(POS);
++            verify(level, never()).scheduleTick(any(), any(Block.class), anyInt());
++
++            clearInvocations(level);
++            BlockMechanics.copperBulbOneTickDelay = true;
++            state.onPlace(level, POS, Blocks.AIR.defaultBlockState(), false);
++            state.onPlace(level, POS, state, false);
++            state.handleNeighborChanged(level, POS, Blocks.STONE, null, false);
++            verify(level, times(2)).scheduleTick(POS, bulb, 1);
++            verify(level, never()).hasNeighborSignal(any());
++
++            BlockMechanics.copperBulbOneTickDelay = false;
++            when(level.hasNeighborSignal(POS)).thenReturn(true);
++            try (var events = mockStatic(CraftEventFactory.class)) {
++                events.when(() -> CraftEventFactory.callBinaryRedstoneChange(level, POS, true)).thenReturn(false);
++                state.tick(level, POS, RandomSource.create(1));
++                events.verify(() -> CraftEventFactory.callBinaryRedstoneChange(level, POS, true));
++                verify(level, never()).setBlockAndUpdate(any(), any());
++            }
++        }
++    }
++
++    @Test
++    void crafterDelayIsIndependentAndCoversPlacementAndPowerEdges() {
++        ServerLevel level = mock(ServerLevel.class);
++        when(level.hasNeighborSignal(POS)).thenReturn(true);
++        BlockState state = Blocks.CRAFTER.defaultBlockState();
++        for (boolean bulb : new boolean[]{false, true}) {
++            for (boolean crafter : new boolean[]{false, true}) {
++                BlockMechanics.copperBulbOneTickDelay = bulb;
++                BlockMechanics.crafterOneTickDelay = crafter;
++                clearInvocations(level);
++                state.handleNeighborChanged(level, POS, Blocks.STONE, null, false);
++                verify(level).scheduleTick(POS, Blocks.CRAFTER, crafter ? 1 : 4);
++                clearInvocations(level);
++                Blocks.CRAFTER.setPlacedBy(level, POS, state, null, ItemStack.EMPTY);
++                verify(level, never()).scheduleTick(any(), any(Block.class), anyInt());
++                Blocks.CRAFTER.setPlacedBy(level, POS, state.setValue(CrafterBlock.TRIGGERED, true), null, ItemStack.EMPTY);
++                verify(level).scheduleTick(POS, Blocks.CRAFTER, crafter ? 1 : 4);
++            }
++        }
++    }
++
++    @Test
++    void disabledDecayKeepsTickEligibilityAndRespectsCancellationWhenReenabled() throws Exception {
++        ServerLevel level = level(false);
++        PluginManager manager = pluginManager(level);
++        doAnswer(invocation -> {
++            ((LeavesDecayEvent) invocation.getArgument(0)).setCancelled(true);
++            return null;
++        }).when(manager).callEvent(any(LeavesDecayEvent.class));
++        BlockState state = Blocks.OAK_LEAVES.defaultBlockState();
++        assertTrue(state.isRandomlyTicking());
++        BlockMechanics.disableLeafDecay = true;
++        state.randomTick(level, POS, RandomSource.create(1));
++        assertTrue(state.isRandomlyTicking());
++        verifyNoInteractions(manager);
++        BlockMechanics.disableLeafDecay = false;
++        state.randomTick(level, POS, RandomSource.create(1));
++        verify(manager).callEvent(any(LeavesDecayEvent.class));
++        verify(level, never()).removeBlock(any(), anyBoolean());
++    }
++
++    @Test
++    void distanceUpdatesContinueAndReconnectedLeavesDoNotInstantlyDecay() throws Exception {
++        ServerLevel level = level(true);
++        PluginManager manager = pluginManager(level);
++        BlockState state = Blocks.OAK_LEAVES.defaultBlockState();
++        AtomicReference<BlockState> current = new AtomicReference<>(state);
++        when(level.getBlockState(any())).thenAnswer(invocation -> POS.equals(invocation.getArgument(0))
++            ? current.get() : state.setValue(LeavesBlock.DISTANCE, 1));
++        when(level.setBlockAndUpdate(eq(POS), any())).thenAnswer(invocation -> {
++            current.set(invocation.getArgument(1));
++            return true;
++        });
++        for (boolean disabled : new boolean[]{false, true}) {
++            BlockMechanics.disableLeafDecay = disabled;
++            current.set(state);
++            state.tick(level, POS, RandomSource.create(1));
++            assertEquals(2, current.get().getValue(LeavesBlock.DISTANCE));
++        }
++        verifyNoInteractions(manager);
++        verify(level, never()).removeBlock(any(), anyBoolean());
++    }
++
++    @Test
++    void instantDecayDoesNotTargetAReplacementBlock() throws Exception {
++        ServerLevel level = level(true);
++        PluginManager manager = pluginManager(level);
++        AtomicReference<BlockState> current = new AtomicReference<>(Blocks.OAK_LEAVES.defaultBlockState());
++        when(level.getBlockState(any())).thenAnswer(invocation -> POS.equals(invocation.getArgument(0))
++            ? current.get() : Blocks.AIR.defaultBlockState());
++        when(level.setBlockAndUpdate(eq(POS), any())).thenAnswer(invocation -> {
++            current.set(Blocks.STONE.defaultBlockState());
++            return true;
++        });
++        Blocks.OAK_LEAVES.defaultBlockState().tick(level, POS, RandomSource.create(1));
++        assertTrue(current.get().is(Blocks.STONE));
++        verifyNoInteractions(manager);
++        verify(level, never()).removeBlock(any(), anyBoolean());
++    }
++
++    private static ServerLevel level(boolean instantDecay) throws Exception {
++        ServerLevel level = mock(ServerLevel.class);
++        PurpurWorldConfig config = mock(PurpurWorldConfig.class);
++        config.leavesInstantDecay = instantDecay;
++        var field = Level.class.getField("purpurConfig");
++        field.setAccessible(true);
++        field.set(level, config);
++        return level;
++    }
++
++    private static PluginManager pluginManager(ServerLevel level) {
++        CraftServer server = mock(CraftServer.class);
++        PluginManager manager = mock(PluginManager.class);
++        when(level.getCraftServer()).thenReturn(server);
++        when(server.getPluginManager()).thenReturn(manager);
++        return manager;
++    }
++}

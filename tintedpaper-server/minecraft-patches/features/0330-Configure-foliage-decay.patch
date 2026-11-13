@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sun, 6 Jul 2025 03:03:04 +0300
+Subject: [PATCH] Configure foliage decay
+
+
+diff --git a/net/minecraft/world/level/block/LeavesBlock.java b/net/minecraft/world/level/block/LeavesBlock.java
+index fbd3b99d13bf4bc874f82e88d3d586f23b7403cf..3dcdedcf42e6504cde6aceff63f2717369a09b50 100644
+--- a/net/minecraft/world/level/block/LeavesBlock.java
++++ b/net/minecraft/world/level/block/LeavesBlock.java
+@@ -83,13 +83,17 @@ public class LeavesBlock extends Block implements SimpleWaterloggedBlock {
+     }
+ 
+     protected boolean decaying(final BlockState state) {
+-        return !state.getValue(PERSISTENT) && state.getValue(DISTANCE) == 7;
++        return !org.dreeam.leaf.config.modules.gameplay.BlockMechanics.disableLeafDecay && !state.getValue(PERSISTENT) && state.getValue(DISTANCE) == 7; // DivineMC - Disable leaf decay
+     }
+ 
+     @Override
+     protected void tick(final BlockState state, final ServerLevel level, final BlockPos pos, final RandomSource random) {
+         level.setBlockAndUpdate(pos, updateDistance(state, level, pos));
+-        if (level.purpurConfig.leavesInstantDecay) checkDecay(state, level, pos, random); // Purpur - Instant leaves decay
++        if (level.purpurConfig.leavesInstantDecay) {
++            // TintedPaper - distance updates and plugin replacements must be observed before instant decay.
++            BlockState current = level.getBlockState(pos);
++            if (current.is(this)) checkDecay(current, level, pos, random);
++        }
+     }
+ 
+     @Override

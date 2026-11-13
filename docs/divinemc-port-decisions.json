@@ -5,11 +5,35 @@
     "sourceRepository": "https://github.com/BX-Team/DivineMC",
     "sourceCommit": "a02492aa29a22f98066fd2a7ac946f310b6f9ece",
     "status": "in-progress",
-    "validation": "API tests: 479 passed, 2 skipped. Complete server suite: 10138 passed, 86 skipped, zero failures/errors, including five API extension regressions. Clean patch reapplication, JAR generation and distribution checks passed with BUILD_NUMBER=10. No server startup, production deployment or benchmark.",
+    "validation": "API tests: 479 passed, 2 skipped. Complete server suite: 10143 passed, 86 skipped, zero failures/errors, including five block mechanics regressions. Clean patch reapplication, JAR generation and distribution checks passed with BUILD_NUMBER=12. A parallel local test attempt exhausted native memory; the complete repeat with --max-workers=1 and ActiveProcessorCount=2 passed. No server startup, production deployment or benchmark.",
     "scope": "Active DivineMC features and supporting sources. Historical removed patches are reference only. Existing Leaf implementations take precedence over duplicate ports.",
     "copyright": "Original patch authors and licenses are preserved."
   },
   "decisions": [
+    {
+      "source": "divinemc-server/minecraft-patches/features/0048-Copper-Bulb-1gt-delay.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Opt-in one-game-tick placement/neighbor updates reuse the native redstone/event path for all eight waxed/weathering bulb variants. Already queued ticks complete even if the configuration is subsequently disabled. Default remains immediate vanilla updates.",
+      "config": "gameplay-mechanisms.blocks.copper-bulb-one-tick-delay",
+      "default": false,
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/level/block/CopperBulbBlock.java", "tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/gameplay/BlockMechanics.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineBlockMechanicsTest.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0049-Crafter-1gt-delay.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Power edges and triggered placement can schedule crafting after one game tick. Use a separate crafter option: the source defines crafter1gt but accidentally reads copperBulb1gt at both scheduling sites. All four option combinations are covered. Default remains four game ticks.",
+      "config": "gameplay-mechanisms.blocks.crafter-one-tick-delay",
+      "default": false,
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/level/block/CrafterBlock.java", "tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/gameplay/BlockMechanics.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineBlockMechanicsTest.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0012-Disable-leaf-decay.patch",
+      "status": "ported-with-adaptations",
+      "reason": "The opt-in flag prevents both natural and Purpur instant decay without freezing distance bookkeeping. Keep the inherited cached-direction helper and world setter/block-change hooks instead of the source's replacement loop. Instant decay reads the resulting world state, preserving reconnected leaves and plugin replacements. Random-tick eligibility stays native and event cancellation remains effective when decay is enabled.",
+      "config": "gameplay-mechanisms.blocks.disable-leaf-decay",
+      "default": false,
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/level/block/LeavesBlock.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/Level.java", "tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/gameplay/BlockMechanics.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineBlockMechanicsTest.java"]
+    },
     {
       "source": "divinemc-api/paper-patches/features/0001-Rebrand.patch",
       "status": "project-specific",
