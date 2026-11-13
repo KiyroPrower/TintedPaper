@@ -1,0 +1,169 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 08:27:21 -0300
+Subject: [PATCH] Cover ZIP listing parity overlays reopening and close
+ failures
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/ZipPackIndexTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/ZipPackIndexTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..4062ae918abe52a7da724e81a425a1dd7461a8bd
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/ZipPackIndexTest.java
+@@ -0,0 +1,156 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.io.IOException;
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Optional;
++import java.util.zip.ZipEntry;
++import java.util.zip.ZipOutputStream;
++import net.minecraft.network.chat.Component;
++import net.minecraft.server.packs.FilePackResources;
++import net.minecraft.server.packs.PackLocationInfo;
++import net.minecraft.server.packs.PackResources;
++import net.minecraft.server.packs.PackType;
++import net.minecraft.server.packs.repository.Pack;
++import net.minecraft.server.packs.repository.PackCompatibility;
++import net.minecraft.server.packs.repository.PackSource;
++import net.minecraft.world.flag.FeatureFlagSet;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.opt.DatapackOptimizations;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.io.TempDir;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++@Normal
++class ZipPackIndexTest {
++    @TempDir
++    Path temporary;
++
++    private static final PackLocationInfo LOCATION = new PackLocationInfo("tinted", Component.literal("test"), PackSource.BUILT_IN, Optional.empty());
++
++    @Test
++    void indexedListingPreservesOrderContentsAndPrefixBoundaries() throws Exception {
++        Path zip = this.temporary.resolve("pack.zip");
++        writeZip(zip, "data/tinted/functions/z.txt", "data/other/functions/foreign.txt",
++            "data/tinted/functions/a.txt", "data/tinted/functions/nested/b.txt",
++            "data/tinted/functions_bad/excluded.txt", "data/tinted/functions/Bad.txt",
++            "data/tinted/functions/", "assets/tinted/functions/client.txt");
++        try (PackResources resources = open(zip)) {
++            boolean original = DatapackOptimizations.zipPackIndex;
++            try {
++                DatapackOptimizations.zipPackIndex = false;
++                List<String> expected = list(resources, "functions");
++                DatapackOptimizations.zipPackIndex = true;
++                assertEquals(expected, list(resources, "functions"));
++                assertEquals(expected, list(resources, "functions"));
++                assertEquals(List.of("tinted:functions/z.txt=data/tinted/functions/z.txt",
++                    "tinted:functions/a.txt=data/tinted/functions/a.txt",
++                    "tinted:functions/nested/b.txt=data/tinted/functions/nested/b.txt"), expected);
++                assertEquals(List.of(), list(resources, "missing"));
++                assertEquals(List.of("tinted:functions/nested/b.txt=data/tinted/functions/nested/b.txt"), list(resources, "functions/nested"));
++            } finally {
++                DatapackOptimizations.zipPackIndex = original;
++            }
++        }
++    }
++
++    @Test
++    void closeReleasesTheIndexAndReopeningObservesTheNewArchive() throws Exception {
++        Path zip = this.temporary.resolve("reload.zip");
++        writeZip(zip, "data/tinted/functions/old.txt");
++        try (PackResources resources = open(zip)) {
++            assertEquals(1, list(resources, "functions").size());
++            java.lang.reflect.Field accessField = FilePackResources.class.getDeclaredField("zipFileAccess");
++            accessField.setAccessible(true);
++            Object access = accessField.get(resources);
++            java.lang.reflect.Field indexField = access.getClass().getDeclaredField("tinted$index");
++            indexField.setAccessible(true);
++            assertFalse(((List<?>) indexField.get(access)).isEmpty());
++            resources.close();
++            assertTrue(((List<?>) indexField.get(access)).isEmpty());
++            writeZip(zip, "data/tinted/functions/new.txt");
++            assertEquals(List.of("tinted:functions/new.txt=data/tinted/functions/new.txt"), list(resources, "functions"));
++        }
++    }
++
++    @Test
++    void closingFromAResourceCallbackRetainsTheNativeFailure() throws Exception {
++        Path zip = this.temporary.resolve("closing.zip");
++        writeZip(zip, "data/tinted/functions/a.txt", "data/tinted/functions/b.txt");
++        boolean original = DatapackOptimizations.zipPackIndex;
++        try {
++            for (boolean enabled : new boolean[] {false, true}) {
++                DatapackOptimizations.zipPackIndex = enabled;
++                try (PackResources resources = open(zip)) {
++                    assertThrows(IllegalStateException.class, () -> resources.listResources(PackType.SERVER_DATA, "tinted", "functions", (id, supplier) -> resources.close()));
++                }
++            }
++        } finally {
++            DatapackOptimizations.zipPackIndex = original;
++        }
++    }
++
++    @Test
++    void overlaysKeepNativePriorityAndShareArchiveOwnership() throws Exception {
++        Path zip = this.temporary.resolve("overlay.zip");
++        writeZip(zip, "data/tinted/functions/shared.txt", "overlay/data/tinted/functions/shared.txt",
++            "overlay/data/tinted/functions/extra.txt", "data/tinted/functions/base.txt");
++        Pack.Metadata metadata = new Pack.Metadata(Component.empty(), PackCompatibility.COMPATIBLE, FeatureFlagSet.of(), List.of("overlay"));
++        try (PackResources resources = new FilePackResources.FileResourcesSupplier(zip).openResources(LOCATION, metadata).findFirst().orElseThrow()) {
++            boolean original = DatapackOptimizations.zipPackIndex;
++            try {
++                DatapackOptimizations.zipPackIndex = false;
++                List<String> expected = list(resources, "functions");
++                DatapackOptimizations.zipPackIndex = true;
++                assertEquals(expected, list(resources, "functions"));
++                assertTrue(expected.contains("tinted:functions/shared.txt=overlay/data/tinted/functions/shared.txt"));
++                assertEquals(3, expected.size());
++                java.lang.reflect.Field stackField = resources.getClass().getDeclaredField("packResourcesStack");
++                stackField.setAccessible(true);
++                List<?> stack = (List<?>) stackField.get(resources);
++                java.lang.reflect.Field accessField = FilePackResources.class.getDeclaredField("zipFileAccess");
++                accessField.setAccessible(true);
++                Object access = accessField.get(stack.getFirst());
++                assertSame(access, accessField.get(stack.getLast()));
++                java.lang.reflect.Field indexField = access.getClass().getDeclaredField("tinted$index");
++                indexField.setAccessible(true);
++                Object index = indexField.get(access);
++                list((PackResources) stack.getFirst(), "functions");
++                list((PackResources) stack.getLast(), "functions");
++                assertSame(index, indexField.get(access));
++            } finally {
++                DatapackOptimizations.zipPackIndex = original;
++            }
++        }
++    }
++
++    private static PackResources open(Path path) {
++        return (PackResources) new FilePackResources.FileResourcesSupplier(path).openMetadata(LOCATION);
++    }
++
++    private static List<String> list(PackResources resources, String directory) {
++        List<String> result = new ArrayList<>();
++        resources.listResources(PackType.SERVER_DATA, "tinted", directory, (id, supplier) -> {
++            try (java.io.InputStream input = supplier.get()) {
++                result.add(id + "=" + new String(input.readAllBytes(), StandardCharsets.UTF_8));
++            } catch (IOException exception) {
++                throw new java.io.UncheckedIOException(exception);
++            }
++        });
++        return result;
++    }
++
++    private static void writeZip(Path path, String... names) throws IOException {
++        try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(path))) {
++            for (String name : names) {
++                output.putNextEntry(new ZipEntry(name));
++                if (!name.endsWith("/")) output.write(name.getBytes(StandardCharsets.UTF_8));
++                output.closeEntry();
++            }
++        }
++    }
++}

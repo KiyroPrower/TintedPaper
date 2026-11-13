@@ -11,10 +11,10 @@ This is an incomplete migration, not a replacement release for DPO.
 
 | Active injections | Decision |
 | --- | --- |
-| 9 | Native behaviour implemented, compilation and regression tests passed |
+| 10 | Native behaviour implemented and local regression suite passed |
 | 36 | Equivalent mechanism verified in the pinned TintedPaper/Paper baseline |
 | 6 | Removed 26.2 noise pipeline or DivineMC-only implementation |
-| 406 | Native target found; semantic comparison still pending |
+| 405 | Native target found; semantic comparison still pending |
 | 1 | External target still needs source resolution |
 
 The source manifests contain 458 active injections. Matching a target file is
@@ -59,6 +59,12 @@ decision entries fail rather than disappearing from the inventory.
 - Compound-only NBT paths of 2-32 nodes are prepared once and reuse one result
   list during each read. Values are never cached; missing-path errors and mutable
   results are preserved. A changed/branching node falls back to native traversal.
+- ZIP resource listings use one immutable, sorted entry index per open archive,
+  shared with overlays. Prefix queries restore archive order before native path
+  validation and stream creation. Closing releases the index; reopening a changed
+  archive rebuilds it. Index construction costs O(N log N) time and O(N) retained
+  entry metadata, replacing repeated full scans with prefix lookup and sorting
+  only the matching entries. Namespace discovery remains on the native path.
 
 Validation also exposed two inherited issues addressed in isolated patches:
 SNBT's grammar shared mutable empty lists/maps between separate parsed documents,
@@ -76,6 +82,7 @@ tintedpaper:
     nbt-path-cache-size: 1024 # 0 disables; maximum 65536
     nbt-list-match-loops: true
     nbt-named-read-plan: true
+    zip-pack-index: true
     selector-alive-check-last: true
   network:
     unknown-tag-holder-sets: true
@@ -127,11 +134,11 @@ over the same native changes during rollout.
 
 ## Patch workflow and handoff
 
-Claude's pre-existing patch 0315 for missing recipe references is preserved.
+The pre-existing patch 0315 for missing recipe references is preserved.
 New changes use applied-source Git commits, not edits to patch text:
 
-- Minecraft features 0316 through 0322.
-- Paper server regression/compatibility features 0069 through 0075.
+- Minecraft features 0316 through 0323.
+- Paper server regression/compatibility features 0069 through 0076.
 - Native TintedPaper configuration source
   `leaf-server/src/main/java/org/dreeam/leaf/config/modules/opt/DatapackOptimizations.java`.
 
@@ -177,19 +184,25 @@ server test tree:
 
 An additional AntiXray reroute test covers legacy and current materials.
 
+Four `ZipPackIndexTest` regressions cover native ordering/content/prefix parity,
+invalid paths, index release and archive reopening, shared overlay ownership and
+priority, and a native closed-ZIP failure when a callback closes the pack. All
+four passed after complete patch reapplication.
+
 After regenerating and fully reapplying the patches, this command succeeded:
 
 ```powershell
 .\gradlew.bat :leaf-server:test createLeafclipJar
 ```
 
-The resulting JUnit XML reports contain 10,180 cases: 10,094 passed, zero failed
-and 86 skipped. All twelve `DatapackPortsTest` cases passed with no skips. The
+The resulting JUnit XML reports contain 10,184 cases: 10,098 passed, zero failed
+and 86 skipped. All twelve `DatapackPortsTest` and all four `ZipPackIndexTest`
+cases passed with no skips. The
 existing Gradle exclusion for the `Slow` tag remains in effect.
 
 The current distribution artifact is
-`leaf-server/build/libs/leaf-leafclip-26.3.local-SNAPSHOT.jar` (28,350,194 bytes),
-SHA-256 `4799397e2e45c509864611a2f4241582871959e2d62c3bdeafc8277c307608cb`.
+`leaf-server/build/libs/leaf-leafclip-26.3.local-SNAPSHOT.jar` (28,354,301 bytes),
+SHA-256 `78c2783d93a99d7c7d719e0ad196df35740dbd96af77ded9a24138b949785cf0`.
 It still uses inherited technical filenames and runtime identifiers. No server startup,
 production deployment, TPS/MSPT benchmark or gameplay integration test was run.
 

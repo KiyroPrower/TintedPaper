@@ -1,0 +1,94 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 08:27:19 -0300
+Subject: [PATCH] Index ZIP resource listings per shared archive with lifecycle
+ cleanup
+
+
+diff --git a/net/minecraft/server/packs/FilePackResources.java b/net/minecraft/server/packs/FilePackResources.java
+index f05850f4a9ee7757409ff610996b8a2fac798fe4..8dddfcaef27ecd34974f25a4428a47c528245738 100644
+--- a/net/minecraft/server/packs/FilePackResources.java
++++ b/net/minecraft/server/packs/FilePackResources.java
+@@ -108,9 +108,10 @@ public class FilePackResources extends AbstractPackMetadataResources implements
+     public void listResources(final PackType type, final String namespace, final String directory, final PackResources.ResourceOutput output) {
+         ZipFile zipFile = this.zipFileAccess.getOrCreateZipFile();
+         if (zipFile != null) {
+-            Enumeration<? extends ZipEntry> entries = zipFile.entries();
+             String root = this.addPrefix(type.getDirectory() + "/" + namespace + "/");
+             String prefix = root + directory + "/";
++            Enumeration<? extends ZipEntry> entries = org.dreeam.leaf.config.modules.opt.DatapackOptimizations.zipPackIndex
++                ? this.zipFileAccess.tinted$entries(zipFile, prefix) : zipFile.entries(); // TintedPaper - index repeated ZIP resource listings
+ 
+             while (entries.hasMoreElements()) {
+                 ZipEntry zipEntry = entries.nextElement();
+@@ -170,6 +171,59 @@ public class FilePackResources extends AbstractPackMetadataResources implements
+         private final File file;
+         private @Nullable ZipFile zipFile;
+         private boolean failedToLoad;
++        // TintedPaper start - one immutable index per open archive, shared with overlays
++        private @Nullable ZipFile tinted$indexedZip;
++        private List<TintedZipEntry> tinted$index = List.of();
++
++        private record TintedZipEntry(ZipEntry entry, int order) {}
++
++        private Enumeration<? extends ZipEntry> tinted$entries(final ZipFile source, final String prefix) {
++            List<TintedZipEntry> indexed;
++            synchronized (this) {
++                if (this.tinted$indexedZip != source) {
++                    List<TintedZipEntry> entries = new ArrayList<>();
++                    Enumeration<? extends ZipEntry> enumeration = source.entries();
++                    while (enumeration.hasMoreElements()) {
++                        ZipEntry entry = enumeration.nextElement();
++                        if (!entry.isDirectory()) entries.add(new TintedZipEntry(entry, entries.size()));
++                    }
++                    entries.sort(java.util.Comparator.comparing(entry -> entry.entry().getName()));
++                    this.tinted$index = List.copyOf(entries);
++                    this.tinted$indexedZip = source;
++                }
++                indexed = this.tinted$index;
++            }
++            int low = 0;
++            int high = indexed.size();
++            while (low < high) {
++                int middle = (low + high) >>> 1;
++                if (indexed.get(middle).entry().getName().compareTo(prefix) < 0) low = middle + 1;
++                else high = middle;
++            }
++            List<TintedZipEntry> matches = new ArrayList<>();
++            for (int i = low; i < indexed.size(); ++i) {
++                TintedZipEntry entry = indexed.get(i);
++                if (!entry.entry().getName().startsWith(prefix)) break;
++                matches.add(entry);
++            }
++            // Duplicate identifiers and diagnostics retain ZIP enumeration order.
++            matches.sort(java.util.Comparator.comparingInt(TintedZipEntry::order));
++            java.util.Iterator<TintedZipEntry> iterator = matches.iterator();
++            return new Enumeration<ZipEntry>() {
++                @Override
++                public boolean hasMoreElements() {
++                    source.size(); // Preserve native closed-ZIP failures, including closure from a resource callback.
++                    return iterator.hasNext();
++                }
++
++                @Override
++                public ZipEntry nextElement() {
++                    source.size();
++                    return iterator.next().entry();
++                }
++            };
++        }
++        // TintedPaper end
+ 
+         private SharedZipFileAccess(final File file) {
+             this.file = file;
+@@ -194,7 +248,9 @@ public class FilePackResources extends AbstractPackMetadataResources implements
+         }
+ 
+         @Override
+-        public void close() {
++        public synchronized void close() { // TintedPaper - serialize index publication and release
++            this.tinted$indexedZip = null; // TintedPaper - release the archive and entry names on close
++            this.tinted$index = List.of(); // TintedPaper
+             if (this.zipFile != null) {
+                 IOUtils.closeQuietly(this.zipFile);
+                 this.zipFile = null;

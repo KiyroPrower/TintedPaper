@@ -6,6 +6,7 @@ public final class DatapackOptimizations extends ConfigModule {
     public static volatile int nbtPathCacheSize = 1024;
     public static volatile boolean nbtListMatchLoops = true;
     public static volatile boolean nbtNamedReadPlan = true;
+    public static volatile boolean zipPackIndex = true;
     public static volatile boolean unknownTagHolderSets = true;
     public static volatile boolean selectorAliveCheckLast = true;
     public static volatile boolean scoreboardTeamNullMember = true;
@@ -20,6 +21,8 @@ public final class DatapackOptimizations extends ConfigModule {
             "Avoid stream allocations while matching NBT list elements.");
         nbtNamedReadPlan = globalConfig.getBoolean("tintedpaper.datapacks.nbt-named-read-plan", true,
             "Reuse traversal scratch space for compound-only NBT paths; always read current tag values.");
+        zipPackIndex = globalConfig.getBoolean("tintedpaper.datapacks.zip-pack-index", true,
+            "Index ZIP resource paths once per open archive; share the index with overlays and release it on close.");
         unknownTagHolderSets = globalConfig.getBoolean("tintedpaper.network.unknown-tag-holder-sets", true,
             "Encode undefined named holder sets directly instead of sending unknown tag names to clients.");
         selectorAliveCheckLast = globalConfig.getBoolean("tintedpaper.datapacks.selector-alive-check-last", true,
