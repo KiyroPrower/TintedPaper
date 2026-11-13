@@ -20,12 +20,12 @@ build
 
 # Leaf
 build-data/dev-imports.txt
-leaf-archived-patches/todo
+tintedpaper-archived-patches/todo
 run
 
-leaf-api/build.gradle.kts
-leaf-server/build.gradle.kts
-leaf-server/src/minecraft
+tintedpaper-api/build.gradle.kts
+tintedpaper-server/build.gradle.kts
+tintedpaper-server/src/minecraft
 paper-api
 paper-server
 

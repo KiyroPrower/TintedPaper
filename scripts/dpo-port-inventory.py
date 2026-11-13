@@ -7,8 +7,8 @@ from pathlib import Path
 
 
 def inventory(source, fork):
-    roots = [fork / "leaf-server/src/minecraft/java", fork / "paper-server/src/main/java",
-             fork / "leaf-server/src/main/java", fork / "paper-api/src/main/java"]
+    roots = [fork / "tintedpaper-server/src/minecraft/java", fork / "paper-server/src/main/java",
+             fork / "tintedpaper-server/src/main/java", fork / "paper-api/src/main/java"]
     rows = []
     seen = set()
     for manifest in sorted((source / "src/main/resources").glob("datapackoptimizer*.mixins.json")):
