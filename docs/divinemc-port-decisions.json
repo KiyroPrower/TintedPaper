@@ -5,6 +5,7 @@
     "sourceRepository": "https://github.com/BX-Team/DivineMC",
     "sourceCommit": "a02492aa29a22f98066fd2a7ac946f310b6f9ece",
     "status": "in-progress",
+    "validation": "API tests: 479 passed, 2 skipped. Complete server suite: 10138 passed, 86 skipped, zero failures/errors, including five API extension regressions. Clean patch reapplication, JAR generation and distribution checks passed with BUILD_NUMBER=10. No server startup, production deployment or benchmark.",
     "scope": "Active DivineMC features and supporting sources. Historical removed patches are reference only. Existing Leaf implementations take precedence over duplicate ports.",
     "copyright": "Original patch authors and licenses are preserved."
   },
@@ -84,7 +85,7 @@
     }
   ],
   "pendingReview": [
-    "All active API features not recorded above, including duplicate verification against the pinned Leaf baseline.",
+    "API supporting Java sources, including bottle events, and the pending reload-command / legacy enable-failure adaptations need their matching native and server integrations.",
     "All active Minecraft feature patches not recorded above. Preliminary title matches are not sufficient to classify a patch as covered.",
     "All remaining Paper server feature and single-file patches, Purpur patches, supporting Java sources, dependencies and native resources.",
     "Partial duplicates require review of each remaining behavior before porting. Threaded features require ownership, lifecycle and shutdown review."
