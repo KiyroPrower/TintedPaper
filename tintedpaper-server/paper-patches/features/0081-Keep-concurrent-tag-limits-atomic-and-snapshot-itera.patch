@@ -1,0 +1,311 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 14:39:48 -0300
+Subject: [PATCH] Keep concurrent tag limits atomic and snapshot iterators
+ mutable
+
+
+diff --git a/src/main/java/io/papermc/paper/util/SizeLimitedSet.java b/src/main/java/io/papermc/paper/util/SizeLimitedSet.java
+index 1eee077b1e2c6d41bdaa4f1a477c715b13981c6d..8245413c33815dd75a3c1e2953ecf5f2d303def7 100644
+--- a/src/main/java/io/papermc/paper/util/SizeLimitedSet.java
++++ b/src/main/java/io/papermc/paper/util/SizeLimitedSet.java
+@@ -1,8 +1,11 @@
+ package io.papermc.paper.util;
+ 
+ import com.google.common.collect.ForwardingSet;
++import java.util.ArrayList;
+ import java.util.Collection;
++import java.util.Iterator;
+ import java.util.Set;
++import java.util.concurrent.CopyOnWriteArraySet;
+ import org.jspecify.annotations.NullMarked;
+ import org.jspecify.annotations.Nullable;
+ 
+@@ -18,7 +21,7 @@ public class SizeLimitedSet<E> extends ForwardingSet<E> {
+     }
+ 
+     @Override
+-    public boolean add(final E element) {
++    public synchronized boolean add(final E element) {
+         if (this.size() >= this.maxSize) {
+             return false;
+         }
+@@ -26,16 +29,50 @@ public class SizeLimitedSet<E> extends ForwardingSet<E> {
+     }
+ 
+     @Override
+-    public boolean addAll(final Collection<? extends @Nullable E> collection) {
+-        if ((collection.size() + this.size()) >= this.maxSize) {
++    public synchronized boolean addAll(final Collection<? extends @Nullable E> collection) {
++        if (collection.size() > this.maxSize - this.size()) {
+             return false;
+         }
+-        boolean edited = false;
++        final Collection<? extends @Nullable E> snapshot = new ArrayList<>(collection);
++        if (snapshot.size() > this.maxSize - this.size()) {
++            return false;
++        }
++        return super.addAll(snapshot);
++    }
+ 
+-        for (final E element : collection) {
+-            edited |= super.add(element);
++    @Override
++    public Iterator<E> iterator() {
++        final Iterator<E> iterator = super.iterator();
++        if (!(this.delegate instanceof CopyOnWriteArraySet<?>)) {
++            return iterator;
+         }
+-        return edited;
++        // TintedPaper - snapshot traversal must retain the live Bukkit set's iterator.remove contract.
++        return new Iterator<>() {
++            private @Nullable E current;
++            private boolean canRemove;
++
++            @Override
++            public boolean hasNext() {
++                return iterator.hasNext();
++            }
++
++            @Override
++            public E next() {
++                E next = iterator.next();
++                this.current = next;
++                this.canRemove = true;
++                return next;
++            }
++
++            @Override
++            public void remove() {
++                if (!this.canRemove) {
++                    throw new IllegalStateException();
++                }
++                SizeLimitedSet.this.remove(this.current);
++                this.canRemove = false;
++            }
++        };
+     }
+ 
+     @Override
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/EntityTagConcurrencyTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/EntityTagConcurrencyTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..7f7da4c251ea9bbaaf79502031885e20edcb8f52
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/EntityTagConcurrencyTest.java
+@@ -0,0 +1,216 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.papermc.paper.configuration.WorldConfiguration;
++import io.papermc.paper.util.SizeLimitedSet;
++import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
++import java.lang.reflect.Method;
++import java.util.ArrayList;
++import java.util.Collection;
++import java.util.HashSet;
++import java.util.Iterator;
++import java.util.List;
++import java.util.Set;
++import java.util.UUID;
++import java.util.concurrent.ConcurrentHashMap;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.Executors;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicBoolean;
++import net.minecraft.advancements.predicates.NbtPredicate;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.core.RegistryAccess;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.server.commands.TagCommand;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.util.ProblemReporter;
++import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.Marker;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.storage.TagValueInput;
++import org.bukkit.craftbukkit.CraftWorld;
++import org.bukkit.craftbukkit.entity.CraftEntity;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.Timeout;
++import org.purpurmc.purpur.PurpurWorldConfig;
++import org.spigotmc.SpigotWorldConfig;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++@Timeout(20)
++class EntityTagConcurrencyTest {
++    @Test
++    void iterationRetainsItsSnapshotWhenAnotherThreadRemovesTheLastTag() throws Exception {
++        Marker entity = entity();
++        Set<String> tags = entity.entityTags();
++        entity.addTag("before");
++        Iterator<String> reader = tags.iterator();
++        Method remove = TagCommand.class.getDeclaredMethod("removeTag", CommandSourceStack.class, java.util.Collection.class, String.class);
++        remove.setAccessible(true);
++        CommandSourceStack sourceInAnotherWorld = mock(CommandSourceStack.class);
++        when(sourceInAnotherWorld.getLevel()).thenReturn(mock(ServerLevel.class));
++        try (var writer = Executors.newSingleThreadExecutor()) {
++            assertEquals(1, writer.submit(() -> remove.invoke(null, sourceInAnotherWorld, List.of(entity), "before")).get(5, TimeUnit.SECONDS));
++            assertEquals("before", reader.next());
++            assertFalse(reader.hasNext());
++            assertTrue(tags.isEmpty());
++        }
++    }
++
++    @Test
++    void bukkitViewStaysLiveAndSupportsIteratorAndBulkRemoval() throws Exception {
++        Marker entity = entity();
++        CraftEntity bukkit = mock(CraftEntity.class, CALLS_REAL_METHODS);
++        when(bukkit.getHandle()).thenReturn(entity);
++        Set<String> view = bukkit.getScoreboardTags();
++        assertSame(entity.entityTags(), view);
++        assertTrue(bukkit.addScoreboardTag("first"));
++        Iterator<String> iterator = view.iterator();
++        assertThrows(IllegalStateException.class, iterator::remove);
++        assertEquals("first", iterator.next());
++        iterator.remove();
++        assertThrows(IllegalStateException.class, iterator::remove);
++        assertTrue(entity.entityTags().isEmpty());
++        view.addAll(List.of("keep", "remove", "other"));
++        var spliterator = view.spliterator();
++        spliterator.estimateSize();
++        List<String> streamSnapshot = view.stream().toList();
++        assertTrue(bukkit.removeScoreboardTag("remove"));
++        assertTrue(view.removeIf("other"::equals));
++        Set<String> snapshot = new HashSet<>();
++        spliterator.forEachRemaining(snapshot::add);
++        assertEquals(Set.of("keep", "remove", "other"), snapshot);
++        assertEquals(snapshot, new HashSet<>(streamSnapshot));
++        assertEquals(Set.of("keep"), view);
++        view.retainAll(Set.of("nothing"));
++        assertTrue(view.isEmpty());
++        view.addAll(List.of("a", "b"));
++        view.removeAll(Set.of("a"));
++        assertEquals(Set.of("b"), view);
++        view.clear();
++        assertTrue(view.isEmpty());
++    }
++
++    @Test
++    void nativeNbtPredicateAndLoadPreserveAll1024Tags() throws Exception {
++        Marker entity = entity();
++        Set<String> expected = new HashSet<>();
++        for (int index = 0; index < 1024; index++) {
++            String tag = "tag-" + index;
++            expected.add(tag);
++            assertTrue(entity.addTag(tag));
++        }
++        assertFalse(entity.addTag("overflow"));
++        CompoundTag saved = NbtPredicate.getEntityTagToCompare(entity);
++        Marker restored = entity();
++        Set<String> liveView = restored.entityTags();
++        restored.addTag("old-value");
++        restored.load(TagValueInput.create(ProblemReporter.DISCARDING, RegistryAccess.EMPTY, saved));
++        assertSame(liveView, restored.entityTags());
++        assertEquals(expected, restored.entityTags());
++        assertFalse(restored.addTag("overflow"));
++        assertTrue(restored.removeTag("tag-0"));
++        assertTrue(restored.addTag("replacement"));
++        assertEquals(1024, restored.entityTags().size());
++    }
++
++    @Test
++    void concurrentNbtPredicatesNeverLoseUnmodifiedTags() throws Exception {
++        Marker entity = entity();
++        Set<String> stable = Set.of("stable-a", "stable-b", "stable-c");
++        entity.entityTags().addAll(stable);
++        CountDownLatch changed = new CountDownLatch(1);
++        AtomicBoolean done = new AtomicBoolean();
++        try (var writer = Executors.newSingleThreadExecutor()) {
++            var writes = writer.submit(() -> {
++                for (int index = 0; !done.get(); index++) {
++                    entity.addTag("changing-" + (index & 31));
++                    entity.removeTag("changing-" + ((index + 1) & 31));
++                    changed.countDown();
++                }
++                return null;
++            });
++            try {
++                assertTrue(changed.await(5, TimeUnit.SECONDS));
++                for (int index = 0; index < 200; index++) {
++                    CompoundTag saved = NbtPredicate.getEntityTagToCompare(entity);
++                    List<String> snapshot = saved.getListOrEmpty("Tags").stream().map(tag -> tag.asString().orElseThrow()).toList();
++                    assertTrue(snapshot.containsAll(stable));
++                    assertEquals(snapshot.size(), new HashSet<>(snapshot).size());
++                }
++            } finally {
++                done.set(true);
++            }
++            writes.get(5, TimeUnit.SECONDS);
++        }
++        assertTrue(entity.entityTags().containsAll(stable));
++    }
++
++    @Test
++    void concurrentNativeAndBukkitViewAddsCannotExceedTheLimit() throws Exception {
++        Marker entity = entity();
++        CountDownLatch start = new CountDownLatch(1);
++        Set<String> added = ConcurrentHashMap.newKeySet();
++        try (var writers = Executors.newFixedThreadPool(8)) {
++            List<java.util.concurrent.Future<?>> tasks = new ArrayList<>();
++            for (int worker = 0; worker < 8; worker++) {
++                int id = worker;
++                tasks.add(writers.submit(() -> {
++                    start.await();
++                    for (int index = 0; index < 256; index++) {
++                        String tag = id + ":" + index;
++                        boolean changed = (index & 1) == 0 ? entity.addTag(tag) : entity.entityTags().addAll(List.of(tag));
++                        if (changed) added.add(tag);
++                    }
++                    return null;
++                }));
++            }
++            start.countDown();
++            for (var task : tasks) task.get(5, TimeUnit.SECONDS);
++        }
++        assertEquals(1024, added.size());
++        assertEquals(added, entity.entityTags());
++        assertFalse(entity.entityTags().addAll(List.of("overflow-a", "overflow-b")));
++    }
++
++    @Test
++    void ordinaryBackingSetsKeepIteratorRemovalAndRejectOversizedBatches() {
++        Set<String> tags = new SizeLimitedSet<>(new HashSet<>(), 2);
++        Collection<String> oversized = mock(Collection.class);
++        when(oversized.size()).thenReturn(3);
++        assertFalse(tags.addAll(oversized));
++        verify(oversized, never()).toArray();
++        assertFalse(tags.addAll(List.of("a", "b", "c")));
++        assertTrue(tags.isEmpty());
++        assertTrue(tags.addAll(List.of("a", "b")));
++        assertFalse(tags.add("overflow"));
++        Iterator<String> iterator = tags.iterator();
++        String removed = iterator.next();
++        iterator.remove();
++        assertFalse(tags.contains(removed));
++        assertEquals(1, tags.size());
++    }
++
++    private static Marker entity() throws Exception {
++        ServerLevel level = mock(ServerLevel.class);
++        var purpurConfig = Level.class.getField("purpurConfig");
++        purpurConfig.setAccessible(true);
++        purpurConfig.set(level, mock(PurpurWorldConfig.class));
++        var spigotConfig = Level.class.getField("spigotConfig");
++        spigotConfig.setAccessible(true);
++        spigotConfig.set(level, mock(SpigotWorldConfig.class));
++        WorldConfiguration config = mock(WorldConfiguration.class);
++        config.entities = mock(WorldConfiguration.Entities.class);
++        config.entities.spawning = mock(WorldConfiguration.Entities.Spawning.class);
++        config.entities.spawning.despawnTime = new Reference2ObjectOpenHashMap<>();
++        when(level.paperConfig()).thenReturn(config);
++        when(level.getNextEntityId()).thenReturn(1);
++        when(level.registryAccess()).thenReturn(RegistryAccess.EMPTY);
++        CraftWorld world = mock(CraftWorld.class);
++        when(world.getUID()).thenReturn(new UUID(1, 2));
++        when(level.getWorld()).thenReturn(world);
++        return new Marker(EntityTypes.MARKER, level);
++    }
++}
