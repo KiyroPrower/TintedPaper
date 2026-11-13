@@ -1,0 +1,191 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 13:03:10 -0300
+Subject: [PATCH] Guard clientbound team removals against stale memberships
+
+
+diff --git a/net/minecraft/network/ClientboundTeamPacketGuard.java b/net/minecraft/network/ClientboundTeamPacketGuard.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..ca0061d67e6dc25f5c08b44ef27214d1a9b1a06f
+--- /dev/null
++++ b/net/minecraft/network/ClientboundTeamPacketGuard.java
+@@ -0,0 +1,120 @@
++package net.minecraft.network;
++
++import io.netty.buffer.ByteBuf;
++import io.netty.channel.ChannelHandlerContext;
++import io.netty.channel.ChannelOutboundHandlerAdapter;
++import io.netty.channel.ChannelPromise;
++import io.netty.handler.codec.EncoderException;
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.Map;
++import java.util.Set;
++import net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket;
++import net.minecraft.network.protocol.game.ClientGamePacketListener;
++import net.minecraft.network.protocol.game.GamePacketTypes;
++import net.minecraft.network.protocol.game.GameProtocols;
++import org.jspecify.annotations.Nullable;
++
++// TintedPaper - tracks native PLAY bytes after packet listeners, before translation/compression, on the event loop.
++final class ClientboundTeamPacketGuard extends ChannelOutboundHandlerAdapter {
++    static final String HANDLER_NAME = "tintedpaper_team_guard";
++    private static final int TEAM_PACKET_ID = teamPacketId();
++    private final ProtocolInfo<ClientGamePacketListener> protocol;
++    private final Map<String, Set<String>> teams = new HashMap<>();
++    private final Map<String, String> memberships = new HashMap<>();
++
++    @SuppressWarnings("unchecked")
++    ClientboundTeamPacketGuard(final ProtocolInfo<?> protocol) {
++        this.protocol = (ProtocolInfo<ClientGamePacketListener>) protocol;
++    }
++
++    private static int teamPacketId() {
++        int[] id = {-1};
++        GameProtocols.CLIENTBOUND_TEMPLATE.details().listPackets((type, networkId) -> {
++            if (type == GamePacketTypes.CLIENTBOUND_SET_PLAYER_TEAM) id[0] = networkId;
++        });
++        if (id[0] < 0) throw new IllegalStateException("Missing clientbound team packet type");
++        return id[0];
++    }
++
++    @Override
++    public void write(final ChannelHandlerContext ctx, final Object msg, final ChannelPromise promise) throws Exception {
++        int firstIdByte = TEAM_PACKET_ID < 128 ? TEAM_PACKET_ID : (TEAM_PACKET_ID & 127) | 128;
++        if (!(msg instanceof ByteBuf bytes) || !bytes.isReadable() || bytes.getUnsignedByte(bytes.readerIndex()) != firstIdByte) {
++            ctx.write(msg, promise);
++            return;
++        }
++        ByteBuf outgoing = bytes;
++        try {
++            ByteBuf input = bytes.duplicate();
++            if (VarInt.read(input) != TEAM_PACKET_ID) {
++                ctx.write(bytes, promise);
++                return;
++            }
++            input.readerIndex(bytes.readerIndex());
++            var packet = (ClientboundSetPlayerTeamPacket) this.protocol.codec().decode(input);
++            if (input.isReadable()) throw new EncoderException("Trailing bytes in clientbound team packet");
++            var filtered = this.filter(packet);
++            if (filtered == null) {
++                bytes.release();
++                promise.setSuccess();
++                return;
++            }
++            if (filtered != packet) {
++                outgoing = ctx.alloc().buffer(bytes.readableBytes());
++                this.protocol.codec().encode(outgoing, filtered);
++            }
++            this.track(filtered);
++        } catch (Throwable failure) {
++            if (outgoing != bytes) outgoing.release();
++            bytes.release();
++            throw failure;
++        }
++        if (outgoing != bytes) bytes.release();
++        ctx.write(outgoing, promise);
++    }
++
++    private @Nullable ClientboundSetPlayerTeamPacket filter(final ClientboundSetPlayerTeamPacket packet) {
++        String name = packet.getName();
++        if (packet.getPlayerAction() != ClientboundSetPlayerTeamPacket.Action.REMOVE || !this.teams.containsKey(name)) {
++            return packet;
++        }
++        var players = packet.getPlayers();
++        if (players.size() == 1) {
++            return name.equals(this.memberships.get(players.iterator().next())) ? packet : null;
++        }
++        Set<String> seen = new HashSet<>();
++        var valid = new ArrayList<String>(players.size());
++        for (String player : players) {
++            if (name.equals(this.memberships.get(player)) && seen.add(player)) valid.add(player);
++        }
++        if (valid.size() == players.size()) return packet;
++        return valid.isEmpty() ? null : packet.tinted$withPlayers(valid);
++    }
++
++    private void track(final ClientboundSetPlayerTeamPacket packet) {
++        String name = packet.getName();
++        if (packet.getTeamAction() == ClientboundSetPlayerTeamPacket.Action.ADD) {
++            this.teams.computeIfAbsent(name, ignored -> new HashSet<>());
++        }
++        Set<String> members = this.teams.get(name);
++        if (members == null) return; // The client ignores membership updates for unknown teams.
++        if (packet.getPlayerAction() == ClientboundSetPlayerTeamPacket.Action.ADD) {
++            for (String player : packet.getPlayers()) {
++                String previous = this.memberships.put(player, name);
++                if (previous != null && !previous.equals(name)) this.teams.get(previous).remove(player);
++                members.add(player);
++            }
++        } else if (packet.getPlayerAction() == ClientboundSetPlayerTeamPacket.Action.REMOVE) {
++            for (String player : packet.getPlayers()) {
++                this.memberships.remove(player, name);
++                members.remove(player);
++            }
++        }
++        if (packet.getTeamAction() == ClientboundSetPlayerTeamPacket.Action.REMOVE) {
++            this.teams.remove(name);
++            for (String player : members) this.memberships.remove(player, name);
++        }
++    }
++}
+diff --git a/net/minecraft/network/ProtocolSwapHandler.java b/net/minecraft/network/ProtocolSwapHandler.java
+index d162238f5824c7038c5c97d52dcb7d123a4792c1..b4f057ebc5a88a2359725f42274de42f9eab0a46 100644
+--- a/net/minecraft/network/ProtocolSwapHandler.java
++++ b/net/minecraft/network/ProtocolSwapHandler.java
+@@ -14,6 +14,10 @@ public interface ProtocolSwapHandler {
+ 
+     static void handleOutboundTerminalPacket(final ChannelHandlerContext ctx, final Packet<?> packet) {
+         if (packet.isTerminal()) {
++            // TintedPaper - PLAY packet IDs and memberships do not carry over to configuration.
++            if (ctx.pipeline().get(ClientboundTeamPacketGuard.HANDLER_NAME) != null) {
++                ctx.pipeline().remove(ClientboundTeamPacketGuard.HANDLER_NAME);
++            }
+             ctx.pipeline().addAfter(ctx.name(), HandlerNames.OUTBOUND_CONFIG, new UnconfiguredPipelineHandler.Outbound());
+             ctx.pipeline().remove(ctx.name());
+         }
+diff --git a/net/minecraft/network/UnconfiguredPipelineHandler.java b/net/minecraft/network/UnconfiguredPipelineHandler.java
+index 15d2d349f7fc370b099eda9e1cb9a1c97153637e..289b218ea49a0517edfadb8c7562757566c1826c 100644
+--- a/net/minecraft/network/UnconfiguredPipelineHandler.java
++++ b/net/minecraft/network/UnconfiguredPipelineHandler.java
+@@ -11,6 +11,7 @@ import io.netty.handler.codec.DecoderException;
+ import io.netty.handler.codec.EncoderException;
+ import io.netty.util.ReferenceCountUtil;
+ import net.minecraft.network.protocol.Packet;
++import net.minecraft.network.protocol.PacketFlow;
+ 
+ public class UnconfiguredPipelineHandler {
+     public static <T extends PacketListener> UnconfiguredPipelineHandler.InboundConfigurationTask setupInboundProtocol(final ProtocolInfo<T> protocolInfo) {
+@@ -25,7 +26,15 @@ public class UnconfiguredPipelineHandler {
+     }
+ 
+     public static <T extends PacketListener> UnconfiguredPipelineHandler.OutboundConfigurationTask setupOutboundProtocol(final ProtocolInfo<T> codecData) {
+-        return setupOutboundHandler(new PacketEncoder<>(codecData));
++        return setupOutboundHandler(new PacketEncoder<>(codecData)).andThen(ctx -> {
++            // TintedPaper - also observe raw packet bytes written by packet plugins.
++            if (codecData.id() == ConnectionProtocol.PLAY && codecData.flow() == PacketFlow.CLIENTBOUND) {
++                var pipeline = ctx.pipeline();
++                String anchor = pipeline.get("via-encoder") != null ? "via-encoder"
++                    : pipeline.get(HandlerNames.COMPRESS) != null ? HandlerNames.COMPRESS : HandlerNames.PREPENDER;
++                pipeline.addAfter(anchor, ClientboundTeamPacketGuard.HANDLER_NAME, new ClientboundTeamPacketGuard(codecData));
++            }
++        });
+     }
+ 
+     private static UnconfiguredPipelineHandler.OutboundConfigurationTask setupOutboundHandler(final ChannelOutboundHandler newHandler) {
+diff --git a/net/minecraft/network/protocol/game/ClientboundSetPlayerTeamPacket.java b/net/minecraft/network/protocol/game/ClientboundSetPlayerTeamPacket.java
+index c5b2d63119a96e6783ff2171af6c6a9a77340cba..72f200062409436bdc544c79f03255fb753f9212 100644
+--- a/net/minecraft/network/protocol/game/ClientboundSetPlayerTeamPacket.java
++++ b/net/minecraft/network/protocol/game/ClientboundSetPlayerTeamPacket.java
+@@ -138,6 +138,10 @@ public class ClientboundSetPlayerTeamPacket implements Packet<ClientGamePacketLi
+         return this.players;
+     }
+ 
++    public ClientboundSetPlayerTeamPacket tinted$withPlayers(final Collection<String> players) {
++        return new ClientboundSetPlayerTeamPacket(this.name, this.method, this.parameters, players); // TintedPaper - immutable filtered copy
++    }
++
+     public Optional<ClientboundSetPlayerTeamPacket.Parameters> getParameters() {
+         return this.parameters;
+     }

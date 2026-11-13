@@ -7,7 +7,7 @@ Leaf Config v3
 including load config, backup old or outdated config, and add config to spark profiler automatically.
 
 diff --git a/net/minecraft/server/Main.java b/net/minecraft/server/Main.java
-index 455302161c8b24a1c953005e0597f3c69f764e1e..69719421061869f145b66ac470957b9fa24445e6 100644
+index 7b1a8fbbb1d07f4b71f43c288da7d28edfbbe020..6f19bc73ba20e24fcb472697514fb51aaa85d95a 100644
 --- a/net/minecraft/server/Main.java
 +++ b/net/minecraft/server/Main.java
 @@ -102,6 +102,8 @@ public class Main {
