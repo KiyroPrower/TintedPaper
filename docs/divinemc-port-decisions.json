@@ -10,6 +10,36 @@
   },
   "decisions": [
     {
+      "source": "divinemc-api/paper-patches/features/0001-Rebrand.patch",
+      "status": "project-specific",
+      "reason": "Retain TintedPaper's own identity, build metadata and attribution. Replacing it with the source fork's branding is not a feature port."
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0002-Delete-Timings.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited API already has its own Timings removal patch covering the timing classes and the command/plugin-manager call sites. Keep that version instead of replaying duplicate deletions.",
+      "evidence": ["tintedpaper-api/paper-patches/features/0011-Remove-Timings.patch"]
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0009-SparklyPaper-Parallel-world-ticking.patch",
+      "status": "covered-by-base",
+      "reason": "The same isParallelWorldTickingEnabled, getTickTimes and getAverageTickTime API signatures and defaults are already provided by the inherited Fish API patch. Keep the existing version.",
+      "evidence": ["tintedpaper-api/paper-patches/features/0017-Fish-Parallel-World-Ticking-API.patch"]
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0007-Pufferfish-Sentry.patch",
+      "status": "covered-by-base",
+      "reason": "The plugin/event context logging hooks are already provided by the inherited Pufferfish Sentry integration. Retain the existing version rather than duplicating the feature. The source's additional legacy enable-failure lifecycle change is separate from those logging hooks and remains under review.",
+      "evidence": ["tintedpaper-api/paper-patches/features/0010-Pufferfish-Sentry.patch"]
+    },
+    {
+      "source": "divinemc-api/paper-patches/features/0003-Delete-ReloadCommand.patch",
+      "support": ["divinemc-server/paper-patches/features/0004-Delete-ReloadCommand.patch"],
+      "status": "requires-compatibility-adaptation",
+      "reason": "The source deletes the public ReloadCommand class and removes Paper's lifecycle guard from CraftServer.reload. A command-level adaptation must retain API linkage and lifecycle validation; do not blindly import those deletions.",
+      "evidence": ["paper-api/src/main/java/org/bukkit/command/defaults/ReloadCommand.java", "paper-server/src/main/java/org/bukkit/craftbukkit/CraftServer.java"]
+    },
+    {
       "source": "divinemc-api/paper-patches/features/0004-Expanded-Adventure-support.patch",
       "status": "ported",
       "reason": "Bukkit Color implements Adventure TextColor without discarding its Bukkit alpha channel. DyeColor can provide RGB values and apply a text style.",
@@ -43,6 +73,14 @@
       "source": "divinemc-server/minecraft-patches/features/0034-Player-ProfileResult-caching.patch",
       "status": "requires-redesign",
       "reason": "The source caches successful hasJoinedServer results by username and returns them for a later login challenge without fresh session validation. Do not import this authentication bypass; any replacement must validate every new challenge."
+    }
+  ],
+  "compatibilityFixes": [
+    {
+      "status": "fixed",
+      "attribution": "Leaf-introduced",
+      "reason": "The inherited collection optimization used EnumMap for MushroomBlockTexture cap faces, but several enum constants intentionally use null. Restore the pinned Paper HashMap so initialization, nullable face lookup and legacy material APIs keep working.",
+      "evidence": ["tintedpaper-api/paper-patches/features/0021-Replace-data-maps-with-optimized-collection.patch", "paper-api/src/main/java/org/bukkit/material/types/MushroomBlockTexture.java", "paper-api/src/test/java/org/bukkit/materials/MaterialDataTest.java"]
     }
   ],
   "pendingReview": [

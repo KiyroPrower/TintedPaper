@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 15:00:23 -0300
+Subject: [PATCH] Preserve nullable mushroom texture lookups
+
+
+diff --git a/src/main/java/org/bukkit/material/types/MushroomBlockTexture.java b/src/main/java/org/bukkit/material/types/MushroomBlockTexture.java
+index a9e61fc7a2b33f7f81f7d943a7a75db495f3b69b..8e2cb1d2b77a588921938d0869b1cfc300de4c10 100644
+--- a/src/main/java/org/bukkit/material/types/MushroomBlockTexture.java
++++ b/src/main/java/org/bukkit/material/types/MushroomBlockTexture.java
+@@ -67,7 +67,7 @@ public enum MushroomBlockTexture {
+     ALL_STEM(15, null);
+     // Leaf start - Replace data maps with optimized collection
+     private static final it.unimi.dsi.fastutil.bytes.Byte2ReferenceMap<MushroomBlockTexture> BY_DATA = new it.unimi.dsi.fastutil.bytes.Byte2ReferenceOpenHashMap<>();
+-    private static final Map<BlockFace, MushroomBlockTexture> BY_BLOCKFACE = new java.util.EnumMap<>(BlockFace.class);
++    private static final Map<BlockFace, MushroomBlockTexture> BY_BLOCKFACE = Maps.newHashMap(); // TintedPaper - null cap faces are valid lookup keys.
+     // Leaf end - Replace data maps with optimized collection
+ 
+     private final Byte data;
+diff --git a/src/test/java/org/bukkit/materials/MaterialDataTest.java b/src/test/java/org/bukkit/materials/MaterialDataTest.java
+index 9ecc4e6954aebacc3cf7805184cbca81daf063e1..21325198fdbf4da776c620d4c160172c5210f2f7 100644
+--- a/src/test/java/org/bukkit/materials/MaterialDataTest.java
++++ b/src/test/java/org/bukkit/materials/MaterialDataTest.java
+@@ -243,6 +243,8 @@ public class MaterialDataTest {
+             BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST, BlockFace.NORTH_EAST, BlockFace.NORTH_WEST,
+             BlockFace.SOUTH_EAST, BlockFace.SOUTH_WEST};
+         MushroomBlockTexture[] textures = MushroomBlockTexture.values();
++        assertThat(MushroomBlockTexture.getCapByFace(null), equalTo(MushroomBlockTexture.ALL_STEM), "Null retains the last texture without a cap face");
++        assertThat(MushroomBlockTexture.getCapByFace(BlockFace.DOWN), nullValue(), "Unsupported faces have no texture mapping");
+         for (Material type : mushroomTypes) {
+             Mushroom mushroom = new Mushroom(type);
+             assertThat(mushroom.getItemType(), equalTo(type), "Constructed with correct mushroom type");
