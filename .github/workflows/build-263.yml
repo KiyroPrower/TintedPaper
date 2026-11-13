@@ -1,6 +1,8 @@
-name: Build TintedPaper 26.3
+name: TintedPaper CI and releases
 
 on:
+  pull_request:
+    branches: ["ver/26.3"]
   push:
     branches: ["ver/26.3"]
   workflow_dispatch:
@@ -8,11 +10,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: tintedpaper-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  BUILD_NUMBER: ${{ github.run_number }}
+  BUILD_BRANCH: ${{ github.base_ref || github.ref_name }}
+
 jobs:
   build:
+    name: Build and test
     runs-on: ubuntu-latest
-    env:
-      BUILD_NUMBER: ${{ github.run_number }}
     steps:
       - name: Checkout TintedPaper
         uses: actions/checkout@v7
@@ -32,20 +41,44 @@ jobs:
       - name: Apply patches
         run: ./gradlew applyAllPatches --stacktrace --no-daemon
       - name: Test and package TintedPaper
-        run: ./gradlew :leaf-server:test createLeafclipJar --stacktrace --no-daemon
-      - name: Prepare TintedPaper artifact
-        run: |
-          mkdir -p dist
-          cp leaf-server/build/libs/leaf-leafclip-26.3*.jar dist/tintedpaper-26.3.jar
+        run: ./gradlew :tintedpaper-server:test createTintedPaperJar --stacktrace --no-daemon
+      - name: Verify distribution metadata
+        run: python3 scripts/check-distribution.py
+      - name: Prepare release assets
+        run: bash scripts/prepareRelease.sh
       - name: Upload TintedPaper
         uses: actions/upload-artifact@v7
         with:
-          name: tintedpaper-26.3
-          path: dist/tintedpaper-26.3.jar
+          name: tintedpaper-build-${{ github.run_number }}
+          path: dist/
           if-no-files-found: error
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: tintedpaper-test-reports
-          path: leaf-server/build/reports/tests/test/
+          name: tintedpaper-tests-${{ github.run_number }}
+          path: tintedpaper-server/build/reports/tests/test/
+
+  release:
+    name: Publish prerelease
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/ver/26.3' && github.repository == 'KiyroPrower/TintedPaper'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download validated assets
+        uses: actions/download-artifact@v8
+        with:
+          name: tintedpaper-build-${{ github.run_number }}
+          path: dist
+      - name: Publish numbered ALPHA build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "26.3-build.${BUILD_NUMBER}" dist/*.jar dist/*.sha256 \
+            --target "$GITHUB_SHA" \
+            --title "TintedPaper 26.3 build ${BUILD_NUMBER} (ALPHA)" \
+            --notes-file dist/release-notes.md \
+            --prerelease

@@ -18,20 +18,11 @@ public class LeafGlobalConfig {
         //LeafConfig.loadPreviousConfigVersion(getString("config-version"));
         configFile.set("config-version", LeafConfig.CURRENT_CONFIG_VERSION);
 
-        configFile.addComments("config-version", pickStringRegionBased("""
-                Leaf Config
-
-                Website: https://www.leafmc.one/
-                Docs: https://www.leafmc.one/docs/getting-started
-                GitHub Repo: https://github.com/Winds-Studio/Leaf
-                Discord: https://discord.com/invite/gfgAwdSEuM""",
-            """
-                Leaf 配置
-
-                官网: https://www.leafmc.one/zh/
-                文档: https://www.leafmc.one/zh/docs/getting-started
-                GitHub 仓库: https://github.com/Winds-Studio/Leaf
-                QQ社区群: 619278377"""));
+        configFile.addComments("config-version", """
+                TintedPaper Config
+                Personal AI-driven Paper fork for a private Minecraft server.
+                https://github.com/KiyroPrower/TintedPaper
+                Patches remain copyrighted by their respective creators.""");
 
         // Pre-structure to force order
         structureConfig();

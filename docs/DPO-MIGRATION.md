@@ -162,7 +162,7 @@ New changes use applied-source Git commits, not edits to patch text:
 - Minecraft features 0316 through 0325.
 - Paper server regression/compatibility features 0069 through 0078.
 - Native TintedPaper configuration source
-  `leaf-server/src/main/java/org/dreeam/leaf/config/modules/opt/DatapackOptimizations.java`.
+  `tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/opt/DatapackOptimizations.java`.
 
 The native config source, this ledger and the inventory script are ordinary root
 repository files; they must be included with the generated patches when the owner
@@ -173,7 +173,7 @@ The contributing guide's `rebuildPatches` abbreviation is ambiguous with the
 current paperweight version. Use:
 
 ```powershell
-.\gradlew.bat :leaf-server:rebuildMinecraftPatches :leaf-server:rebuildPaperServerPatches
+.\gradlew.bat :tintedpaper-server:rebuildMinecraftPatches :tintedpaper-server:rebuildPaperServerPatches
 .\gradlew.bat applyAllPatches
 ```
 
@@ -228,7 +228,7 @@ reapplication and the full local suite.
 After regenerating and fully reapplying the patches, this command succeeded:
 
 ```powershell
-.\gradlew.bat :leaf-server:test createLeafclipJar
+.\gradlew.bat :tintedpaper-server:test createLeafclipJar
 ```
 
 The resulting JUnit XML reports contain 10,190 cases: 10,104 passed, zero failed
@@ -238,7 +238,7 @@ cases, plus all three `EntityAndPlacementPortsTest` and all three
 existing Gradle exclusion for the `Slow` tag remains in effect.
 
 The current distribution artifact is
-`leaf-server/build/libs/leaf-leafclip-26.3.local-SNAPSHOT.jar` (28,354,596 bytes),
+`tintedpaper-server/build/libs/leaf-leafclip-26.3.local-SNAPSHOT.jar` (28,354,596 bytes),
 SHA-256 `14e78d7912286096cd7a3a737ad8e1fa2639e3ac1308e0a82c1c03cff1fc20f0`.
 It still uses inherited technical filenames and runtime identifiers. No server startup,
 production deployment, TPS/MSPT benchmark or gameplay integration test was run.

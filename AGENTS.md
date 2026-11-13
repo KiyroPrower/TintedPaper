@@ -9,7 +9,7 @@ TintedPaper is a personal AI-driven Paper fork maintained for a private Minecraf
 Unless the user explicitly expands the scope, only modify applied Java source
 files in these areas:
 
-- Minecraft sources under `leaf-server`
+- Minecraft sources under `tintedpaper-server`
 - Applied Paper API sources
 - Applied Paper server sources
 - Existing Leaf source files located alongside those applied sources
@@ -19,18 +19,21 @@ other files are read-only unless the user explicitly requests otherwise.
 
 ## Patch system
 
-Leaf uses Paper's paperweight patch system; follow the workflow in
+TintedPaper uses Paper's paperweight patch system; follow the workflow in
 `CONTRIBUTING.md`. Apply, create, and update patches only through its Git
 workflow and Gradle tasks. Never edit `.patch` files or their numbering or
 ordering directly.
 
+Rebuild tasks normalize inherited patch filename branding to `tintedpaper-`.
+Preserve author credits and licenses; do not rename Java packages solely for branding.
+
 Patch directories:
 
-- `leaf-server/minecraft-patches/`: Minecraft implementation changes.
-- `leaf-server/paper-patches/`: Paper server implementation changes.
-- `leaf-api/paper-patches/`: Paper API changes.
+- `tintedpaper-server/minecraft-patches/`: Minecraft implementation changes.
+- `tintedpaper-server/paper-patches/`: Paper server implementation changes.
+- `tintedpaper-api/paper-patches/`: Paper API changes.
 
-`leaf-archived-patches/` is historical reference, not the current baseline.
+`tintedpaper-archived-patches/` is historical reference, not the current baseline.
 
 Applying patches overwrites applied sources; make sure no unsaved changes
 would be lost first. Do not update upstream references (such as `paperCommit`)
@@ -50,6 +53,10 @@ unhelpful, or stale. Do not update or rebuild the index unless asked.
 ## Validation policy
 
 The owner performs compilation, testing, benchmarking, and runtime validation.
+
+The owner explicitly authorized local compilation and tests during this migration
+on 2026-11-13. That authorization persists; it does not authorize server startup,
+production deployment or benchmarks.
 
 Do not run Gradle builds, compilation, tests, JMH benchmarks, server startup,
 modifying formatters, or scripts that rewrite repository content. Patch system
@@ -96,6 +103,13 @@ configuration defaults. For API changes, update both the Paper API source and
 its server implementation.
 
 ## Git safety
+
+Both Codex and Claude work on this repository, so branch names describe the change, never the agent:
+use one `<type>/<change>` branch (`feat/`, `fix/`, `perf/`, `port/`, `chore/` or `docs/`) and one pull
+request per coherent implementation batch.
+Do not push implementation commits directly to `ver/26.3`. Validate its current
+head before merging; the post-merge workflow publishes the numbered prerelease.
+Never recreate historical PRs or rewrite published commits to fabricate this flow.
 
 Preserve all unrelated working-tree changes; do not assume existing changes
 were produced by an agent.

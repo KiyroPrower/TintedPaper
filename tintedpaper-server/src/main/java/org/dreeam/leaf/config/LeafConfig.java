@@ -52,8 +52,8 @@ public class LeafConfig {
 
     protected static final File CONFIG_DIRECTORY = new File("config");
     protected static final String CONFIG_MODULE_PACKAGE = "org.dreeam.leaf.config.modules";
-    protected static final String GLOBAL_CONFIG_FILE = "leaf-global.yml";
-    protected static final String DEFAULT_WORLD_CONFIG_FILE = "leaf-world-defaults.yml"; // Leaf TODO - Per world config
+    protected static final String GLOBAL_CONFIG_FILE = "tintedpaper-global.yml";
+    protected static final String DEFAULT_WORLD_CONFIG_FILE = "tintedpaper-world-defaults.yml"; // Leaf TODO - Per world config
 
     private static final String SPARK_EXTRA_CONFIG_PROPERTY =  "spark.serverconfigs.extra";
     private static final String SPARK_HIDDEN_PATHS_PROPERTY =  "spark.serverconfigs.hiddenpaths";
@@ -106,6 +106,7 @@ public class LeafConfig {
     private static void loadConfig(boolean init) throws Exception {
         // Create config folder
         createDirectory(CONFIG_DIRECTORY);
+        migrateLegacyConfigs(CONFIG_DIRECTORY.toPath()); // TintedPaper - retain existing settings without overwriting new configs
 
         globalConfig = new LeafGlobalConfig(init);
 
@@ -115,6 +116,16 @@ public class LeafConfig {
 
     public static LeafGlobalConfig globalConfig() {
         return globalConfig;
+    }
+
+    protected static void migrateLegacyConfigs(Path directory) throws IOException {
+        for (String name : List.of(GLOBAL_CONFIG_FILE, DEFAULT_WORLD_CONFIG_FILE)) {
+            Path current = directory.resolve(name);
+            Path legacy = directory.resolve(name.replace("tintedpaper-", "leaf-"));
+            if (!Files.exists(current) && Files.isRegularFile(legacy)) {
+                Files.copy(legacy, current);
+            }
+        }
     }
 
     static boolean isChineseLocale() {
@@ -231,7 +242,7 @@ public class LeafConfig {
 
     private static List<String> buildSparkExtraConfigs() {
         List<String> extraConfigs = new ArrayList<>(Arrays.asList(
-            "config/leaf-global.yml",
+            "config/tintedpaper-global.yml",
             "config/gale-global.yml",
             "config/gale-world-defaults.yml"
         ));

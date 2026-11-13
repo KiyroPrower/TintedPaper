@@ -4,7 +4,6 @@ pluginManagement {
     repositories {
         gradlePluginPortal()
         maven("https://repo.papermc.io/repository/maven-public/")
-        maven("https://maven.leafmc.one/snapshots/") // Leaf - Use leafclip
     }
 }
 
@@ -17,14 +16,14 @@ if (!file(".git").exists()) {
     val errorText = """
         
         =====================[ ERROR ]=====================
-         The Leaf project directory is not a properly cloned Git repository.
+         The TintedPaper project directory is not a properly cloned Git repository.
          
-         In order to build Leaf from source you must clone
-         the Leaf repository using Git, not download a code
+         In order to build TintedPaper from source you must clone
+         the TintedPaper repository using Git, not download a code
          zip from GitHub.
          
-         Built Leaf jars are available for download at
-         https://www.leafmc.one/download
+         Built TintedPaper jars are available for download at
+         https://github.com/KiyroPrower/TintedPaper/releases
          
          See https://github.com/PaperMC/Paper/blob/main/CONTRIBUTING.md
          for further information on building and modifying Paper forks.
@@ -34,9 +33,9 @@ if (!file(".git").exists()) {
     error(errorText)
 }
 
-rootProject.name = "leaf"
+rootProject.name = "tintedpaper"
 
-for (name in listOf("leaf-api", "leaf-server")) {
+for (name in listOf("tintedpaper-api", "tintedpaper-server")) {
     val projName = name.lowercase(Locale.ENGLISH)
     include(projName)
 }

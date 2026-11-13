@@ -1,49 +1,25 @@
 --- a/paper-server/build.gradle.kts
 +++ b/paper-server/build.gradle.kts
-@@ -9,19 +_,34 @@
-     idea
-     id("io.papermc.paperweight.core")
-     id("io.papermc.fill.gradle") version "1.0.14"
-+    id("cn.dreeam.leaper") version "1.0.2" // Leaf - Use leafclip
- }
- 
- val paperMavenPublicUrl = "https://repo.papermc.io/repository/maven-public/"
-+val leafMavenPublicUrl = "https://maven.leafmc.one/snapshots/" // Leaf - project setup - Add publish repo
- 
- dependencies {
-     mache("io.papermc:mache:26.3+build.1")
--    paperclip("io.papermc:paperclip:3.0.4")
-+    // Leaf - Use leafclip - paperclip is included in QuantumLeaper
- }
- 
- paperweight {
+@@ -22,6 +_,19 @@
      minecraftVersion = providers.gradleProperty("mcVersion")
      gitFilePatches = false
  
 +    // Leaf start - project setup
-+    val leaf = forks.register("leaf") {
++    val tintedpaper = forks.register("tintedpaper") {
 +        upstream.patchDir("paperServer") {
 +            upstreamPath = "paper-server"
 +            excludes = setOf("src/minecraft", "patches", "build.gradle.kts")
-+            patchesDir = rootDirectory.dir("leaf-server/paper-patches")
++            patchesDir = rootDirectory.dir("${rootProject.name}-server/paper-patches")
 +            outputDir = rootDirectory.dir("paper-server")
 +        }
 +    }
 +
-+    activeFork = leaf
++    activeFork = tintedpaper
 +    // Leaf end - project setup
 +
      updatingMinecraft {
          //oldPaperCommit = "e5fe71723e2ffde7cc9fafc085ac3bb73e63175e"
      }
-@@ -31,6 +_,7 @@
-     libraryRepositories.addAll(
-         "https://repo.maven.apache.org/maven2/",
-         paperMavenPublicUrl,
-+        leafMavenPublicUrl // Leaf - project setup - Add publish repo
-     )
- }
- 
 @@ -86,7 +_,22 @@
      }
  }
@@ -73,7 +49,7 @@
  
  dependencies {
 -    implementation(project(":paper-api"))
-+    implementation(project(":leaf-api")) // Leaf - project setup
++    implementation(project(":${rootProject.name}-api")) // TintedPaper - project setup
 +
 +    // Leaf start - Libraries
 +    implementation("com.github.thatsmusic99:ConfigurationMaster-API:v2.0.0-rc.3") { // Leaf config
@@ -111,7 +87,7 @@
      // Deps that were previously in the API but have now been moved here for backwards compat, eventually to be removed
      runtimeOnly("commons-lang:commons-lang:2.6")
      runtimeOnly("org.xerial:sqlite-jdbc:3.49.1.0")
-@@ -148,40 +_,57 @@
+@@ -148,40 +_,58 @@
      }
  
      testImplementation("io.github.classgraph:classgraph:4.8.184") // For mob goal test
@@ -166,22 +142,24 @@
          val gitHash = git.exec(providers, "rev-parse", "--short=7", "HEAD").get().trim()
          val implementationVersion = "$mcVersion-${build ?: "DEV"}-$gitHash"
          val date = git.exec(providers, "show", "-s", "--format=%ci", gitHash).get().trim()
-         val gitBranch = git.exec(providers, "rev-parse", "--abbrev-ref", "HEAD").get().trim()
+-        val gitBranch = git.exec(providers, "rev-parse", "--abbrev-ref", "HEAD").get().trim()
++        val gitBranch = providers.environmentVariable("BUILD_BRANCH")
++            .orElse(git.exec(providers, "rev-parse", "--abbrev-ref", "HEAD")).get().trim()
          attributes(
              "Main-Class" to "org.bukkit.craftbukkit.Main",
 -            "Implementation-Title" to "Paper",
-+            "Implementation-Title" to "Leaf", // Leaf - Rebrand
++            "Implementation-Title" to "TintedPaper", // TintedPaper
              "Implementation-Version" to implementationVersion,
              "Implementation-Vendor" to date,
 -            "Specification-Title" to "Paper",
-+            "Specification-Title" to "Leaf", // Leaf - Rebrand
++            "Specification-Title" to "TintedPaper", // TintedPaper
              "Specification-Version" to project.version,
 -            "Specification-Vendor" to "Paper Team",
 -            "Brand-Id" to "papermc:paper",
 -            "Brand-Name" to "Paper",
-+            "Specification-Vendor" to "Winds Studio", // Leaf - Rebrand
-+            "Brand-Id" to "winds-studio:leaf", // Leaf - Rebrand
-+            "Brand-Name" to "Leaf", // Leaf - Rebrand
++            "Specification-Vendor" to "TintedPaper", // TintedPaper
++            "Brand-Id" to "kiyroprower:tintedpaper", // TintedPaper
++            "Brand-Name" to "TintedPaper", // TintedPaper
              "Build-Number" to (build ?: ""),
              "Build-Time" to buildTime.toString(),
              "Git-Branch" to gitBranch,
@@ -203,29 +181,25 @@
  
      doFirst {
          workingDir.mkdirs()
-@@ -341,6 +_,14 @@
+@@ -341,8 +_,16 @@
      mainClass.set(null as String?)
  }
  
-+// Leaf start - Use leafclip
-+tasks.registerRunTask("runLeafclip") {
-+    description = "Spin up a test server from the Mojang mapped Paperclip jar"
-+    classpath(tasks.createLeafclipJar.flatMap { it.outputZip }) // Leaf - Use leafclip
-+    mainClass.set(null as String?)
++tasks.register<Copy>("createTintedPaperJar") {
++    description = "Package the Paperclip distribution with the TintedPaper versioned filename"
++    from(tasks.createPaperclipJar.flatMap { it.outputZip })
++    into(rootProject.layout.buildDirectory.dir("dist"))
++    val distributionVersion = project.version.toString() // resolved at configuration time for the configuration cache
++    rename { "tintedpaper-$distributionVersion.jar" }
 +}
-+// Leaf end - Use leafclip
 +
  fill {
-     project("paper")
+-    project("paper")
++    project("tintedpaper")
      versionFamily(paperweight.minecraftVersion.map { it.split(".", "-").takeWhile { part -> part.toIntOrNull() != null }.take(2).joinToString(".") })
-@@ -351,9 +_,52 @@
+     version(paperweight.minecraftVersion)
  
-         downloads {
-             register("server:default") {
--                file = tasks.createPaperclipJar.flatMap { it.outputZip }
-+                file = tasks.createLeafclipJar.flatMap { it.outputZip } // Leaf - Use leafclip
-                 nameResolver.set { project, _, version, build -> "$project-$version-$build.jar" }
-             }
+@@ -357,3 +_,38 @@
          }
      }
  }
@@ -248,14 +222,6 @@
 +    }
 +}
 +// Gale end - package license into jar
-+
-+// Leaf start - Use leafclip
-+leaper {
-+    updater {
-+        bibliothek("https://api.leafmc.one/v2/projects/leaf")
-+    }
-+}
-+// Leaf end - Use leafclip
 +
 +// Leaf start - Leaf JUnit test suite
 +tasks.register<Test>("runLeafTests") {

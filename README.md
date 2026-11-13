@@ -10,12 +10,16 @@ O alvo atual é Minecraft **26.3**, com **Java 25**.
 
 ```powershell
 .\gradlew.bat applyAllPatches
-.\gradlew.bat :leaf-server:test createLeafclipJar
+.\gradlew.bat :tintedpaper-server:test createTintedPaperJar
 ```
 
-Em Linux ou macOS, use `./gradlew` no lugar de `.\gradlew.bat`. Os nomes internos dos módulos e tarefas herdados são mantidos para compatibilidade com o sistema de patches. Os JARs são gerados em `leaf-server/build/libs/`.
+Em Linux ou macOS, use `./gradlew` no lugar de `.\gradlew.bat`. Os módulos são `tintedpaper-api` e `tintedpaper-server`. O JAR executável é gerado em `build/dist/`, com o empacotador Paperclip padrão.
 
-[Construções e artefatos](https://github.com/KiyroPrower/TintedPaper/actions/workflows/build-263.yml) · [Guia de contribuição](CONTRIBUTING.md)
+As builds do CI seguem o versionamento do Paper: `26.3.build.N-alpha`. Compilações locais sem `BUILD_NUMBER` usam o identificador de desenvolvimento `26.3.local-SNAPSHOT`, também usado pelo Paper.
+
+Cada lote de alterações deve entrar por uma branch e um pull request. O CI reaplica os patches, executa os testes e verifica os artefatos. Após a integração em `ver/26.3`, publica uma prerelease numerada com JAR e SHA-256. O canal atual é ALPHA e a migração ainda está em andamento.
+
+[Releases](https://github.com/KiyroPrower/TintedPaper/releases) · [Construções e artefatos](https://github.com/KiyroPrower/TintedPaper/actions/workflows/build-263.yml) · [Guia de contribuição](CONTRIBUTING.md)
 
 ## Autoria e licenças
 

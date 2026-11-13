@@ -7,7 +7,6 @@ plugins {
 }
 
 val paperMavenPublicUrl = "https://repo.papermc.io/repository/maven-public/"
-val leafMavenPublicUrl = "https://maven.leafmc.one/snapshots/"
 
 subprojects {
     apply(plugin = "java-library")
@@ -22,7 +21,8 @@ subprojects {
     repositories {
         mavenCentral()
         maven(paperMavenPublicUrl)
-        maven(leafMavenPublicUrl)
+        // Dependency source only: hosts ConfigurationMaster-API and the spark dev builds the server depends on.
+        maven("https://maven.leafmc.one/snapshots/")
     }
 
     tasks.withType<JavaCompile>().configureEach {
@@ -45,19 +45,29 @@ subprojects {
         }
     }
 
-    extensions.configure<PublishingExtension> {
-        repositories {
-            maven(leafMavenPublicUrl) {
-                name = "leaf"
+}
 
-                credentials.username = System.getenv("REPO_USER")
-                credentials.password = System.getenv("REPO_PASSWORD")
+// Keep patch numbers, contents and author credits; normalize only inherited filename branding.
+val brandedPatchDirectories = mapOf(
+    "rebuildPaperApiFeaturePatches" to file("tintedpaper-api/paper-patches/features"),
+    "rebuildMinecraftFeaturePatches" to file("tintedpaper-server/minecraft-patches/features"),
+    "rebuildPaperServerFeaturePatches" to file("tintedpaper-server/paper-patches/features"),
+)
+allprojects {
+    tasks.matching { it.name in brandedPatchDirectories.keys }.configureEach {
+        val patchDirectory = brandedPatchDirectories.getValue(name)
+        doLast {
+            for (patch in patchDirectory.listFiles().orEmpty()) {
+                val brandedName = patch.name.replace(Regex("(?i)leaf-"), "tintedpaper-")
+                if (brandedName != patch.name) {
+                    java.nio.file.Files.move(patch.toPath(), patch.toPath().resolveSibling(brandedName))
+                }
             }
         }
     }
 }
 
-project(":leaf-server") {
+project(":tintedpaper-server") {
     apply(from = rootProject.file("gradle/patch-editing.gradle.kts"))
 }
 
@@ -67,18 +77,18 @@ paperweight {
 
         patchFile {
             path = "paper-server/build.gradle.kts"
-            outputFile = file("leaf-server/build.gradle.kts")
-            patchFile = file("leaf-server/build.gradle.kts.patch")
+            outputFile = file("tintedpaper-server/build.gradle.kts")
+            patchFile = file("tintedpaper-server/build.gradle.kts.patch")
         }
         patchFile {
             path = "paper-api/build.gradle.kts"
-            outputFile = file("leaf-api/build.gradle.kts")
-            patchFile = file("leaf-api/build.gradle.kts.patch")
+            outputFile = file("tintedpaper-api/build.gradle.kts")
+            patchFile = file("tintedpaper-api/build.gradle.kts.patch")
         }
         patchDir("paperApi") {
             upstreamPath = "paper-api"
             excludes = setOf("build.gradle.kts")
-            patchesDir = file("leaf-api/paper-patches")
+            patchesDir = file("tintedpaper-api/paper-patches")
             outputDir = file("paper-api")
         }
     }
