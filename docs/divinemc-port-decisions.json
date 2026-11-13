@@ -11,6 +11,36 @@
   },
   "decisions": [
     {
+      "source": "divinemc-server/minecraft-patches/features/0003-Option-to-disable-method-profiler.patch",
+      "status": "covered-by-base",
+      "reason": "Retain Leaf's existing configurable vanilla profiler implementation: Profiler.get returns InactiveProfiler when disabled, server profiler activation is bypassed, and debug/perf commands and resource reload profiling already honor the same policy. Do not add a second switch with competing defaults.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0006-Configurable-vanilla-profiler.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/util/profiling/Profiler.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0014-SparklyPaper-Skip-distanceToSqr-call-in-ServerEntity.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited SparklyPaper implementation already guards movement-distance calculations by Vec3 identity before distanceToSqr, including the current tracker paths. Preserve it instead of nesting another identical guard.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0101-SparklyPaper-Skip-distanceToSqr-call-in-ServerEntity.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/server/level/ServerEntity.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0007-Paper-PR-Add-ticket-on-player-join-to-avoid-chunk-lo.patch",
+      "status": "covered-by-base",
+      "reason": "The same join-ticket proposal is already inherited. Keep its five-second ticket, join hook and explicit loading/simulation/keep-dimension flags; the DivineMC variant omits those flags.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0192-Paper-PR-Add-ticket-on-player-join-to-avoid-chunk-lo.patch", "tintedpaper-server/src/minecraft/java/ca/spottedleaf/moonrise/patches/chunk_system/player/RegionizedPlayerChunkLoader.java", "tintedpaper-server/src/minecraft/java/net/minecraft/server/players/PlayerList.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0004-Paper-PR-Add-FillBottleEvents-for-player-and-dispens.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Add cancellable player/dispenser bottle-fill events with mutable result items. Cover water, dragon breath, honey and water cauldrons. Move the source's incorrect empty-cauldron pouring hook to the water-cauldron glass-bottle interaction, before level changes or inventory mutations, so both the new event and the existing cauldron event can prevent consumption. Keep source defaults and use Paper's held-slot resync instead of full-container resync.",
+      "evidence": ["paper-api/src/main/java/io/papermc/paper/event/player/PlayerFillBottleEvent.java", "paper-api/src/main/java/io/papermc/paper/event/block/BlockFillBottleEvent.java", "tintedpaper-server/src/minecraft/java/net/minecraft/core/cauldron/CauldronInteractions.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineBottleEventsTest.java"]
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0005-Paper-PR-Add-FillBottleEvents-for-player-and-dispens.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Native dispatch helpers provide detached copies of input/result items and centralize hand resync for cancellation or glass-bottle results. Nullable results are rejected at the API boundary; plugin result replacement and mutable result edits remain supported.",
+      "evidence": ["paper-server/src/main/java/org/bukkit/craftbukkit/event/CraftEventFactory.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineBottleEventsTest.java"]
+    },
+    {
       "source": "divinemc-server/minecraft-patches/features/0053-Cleanup-dead-code-from-Paper.patch",
       "status": "ported-missing-subset",
       "reason": "Keep the inherited Leaf entity movement and Connection changes. Port only the remaining unused PacketProcessor watchdog deque/counter instrumentation; current native, applied Paper and owned server sources do not consume its diagnostic accessors. Packet filtering, exception reporting, fatal Error propagation and shutdown rejection stay intact.",
