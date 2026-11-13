@@ -1,0 +1,120 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 20:10:36 -0300
+Subject: [PATCH] Verify End biome cache identity bounds and thread isolation
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineEndBiomeCacheTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineEndBiomeCacheTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..db11b7197b80c914171d8503474850b580cf501d
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineEndBiomeCacheTest.java
+@@ -0,0 +1,108 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.util.concurrent.Executors;
++import java.util.concurrent.TimeUnit;
++import net.minecraft.core.Holder;
++import net.minecraft.core.HolderGetter;
++import net.minecraft.world.level.biome.Biome;
++import net.minecraft.world.level.biome.BiomeResolver;
++import net.minecraft.world.level.biome.Biomes;
++import net.minecraft.world.level.biome.Climate;
++import net.minecraft.world.level.biome.TheEndBiomeSource;
++import net.minecraft.world.level.levelgen.densityfunction.DensitySampler;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.opt.OptimizeBiome;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.ArgumentMatchers.anyInt;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DivineEndBiomeCacheTest {
++    private boolean previousEnabled;
++    private int previousCapacity;
++
++    @BeforeEach
++    void enable() {
++        this.previousEnabled = OptimizeBiome.endBiomeCache;
++        this.previousCapacity = OptimizeBiome.endBiomeCacheCapacity;
++        OptimizeBiome.endBiomeCache = true;
++        OptimizeBiome.endBiomeCacheCapacity = 1024;
++    }
++
++    @AfterEach
++    void restore() {
++        OptimizeBiome.endBiomeCache = this.previousEnabled;
++        OptimizeBiome.endBiomeCacheCapacity = this.previousCapacity;
++    }
++
++    @Test
++    void cachedBiomesRetainHeightAndSamplerIdentityAndCanBeDisabled() {
++        var biomes = biomes();
++        var source = TheEndBiomeSource.create(biomes);
++        DensitySampler.Bound erosion = mock(DensitySampler.Bound.class);
++        when(erosion.sampleValue(anyInt(), anyInt(), anyInt())).thenAnswer(call -> call.<Integer>getArgument(1) == 0 ? 0.5F : -0.5F);
++        BiomeResolver resolver = source.createResolver(sampler(erosion));
++        for (int repeat = 0; repeat < 3; repeat++) {
++            assertSame(biomes.getOrThrow(Biomes.END_HIGHLANDS), resolver.getNoiseBiome(1024, 0, 0));
++            assertSame(biomes.getOrThrow(Biomes.SMALL_END_ISLANDS), resolver.getNoiseBiome(1024, 1, 0));
++        }
++        verify(erosion, times(2)).sampleValue(anyInt(), anyInt(), anyInt());
++        DensitySampler.Bound other = mock(DensitySampler.Bound.class);
++        when(other.sampleValue(anyInt(), anyInt(), anyInt())).thenReturn(0.0F);
++        assertSame(biomes.getOrThrow(Biomes.END_MIDLANDS), source.createResolver(sampler(other)).getNoiseBiome(1024, 0, 0));
++        OptimizeBiome.endBiomeCache = false;
++        resolver.getNoiseBiome(1024, 0, 0);
++        resolver.getNoiseBiome(1024, 0, 0);
++        verify(erosion, times(4)).sampleValue(anyInt(), anyInt(), anyInt());
++    }
++
++    @Test
++    void smallCapacitiesEvictAndUnpackableCoordinatesUseNativeSampling() {
++        DensitySampler.Bound erosion = mock(DensitySampler.Bound.class);
++        BiomeResolver resolver = TheEndBiomeSource.create(biomes()).createResolver(sampler(erosion));
++        OptimizeBiome.endBiomeCacheCapacity = 1;
++        resolver.getNoiseBiome(1024, 0, 0);
++        resolver.getNoiseBiome(1028, 0, 0);
++        resolver.getNoiseBiome(1024, 0, 0);
++        verify(erosion, times(3)).sampleValue(anyInt(), anyInt(), anyInt());
++        OptimizeBiome.endBiomeCacheCapacity = 0;
++        resolver.getNoiseBiome(1032, 0, 0);
++        resolver.getNoiseBiome(1032, 0, 0);
++        verify(erosion, times(4)).sampleValue(anyInt(), anyInt(), anyInt());
++        resolver.getNoiseBiome(1024, 4096, 0);
++        resolver.getNoiseBiome(1024, 4096, 0);
++        verify(erosion, times(6)).sampleValue(anyInt(), anyInt(), anyInt());
++    }
++
++    @Test
++    void eachWorkerUsesItsOwnBoundedCache() throws Exception {
++        DensitySampler.Bound erosion = mock(DensitySampler.Bound.class);
++        BiomeResolver resolver = TheEndBiomeSource.create(biomes()).createResolver(sampler(erosion));
++        Holder<Biome> expected = resolver.getNoiseBiome(1024, 0, 0);
++        try (var worker = Executors.newSingleThreadExecutor()) {
++            assertSame(expected, worker.submit(() -> {
++                Holder<Biome> first = resolver.getNoiseBiome(1024, 0, 0);
++                assertSame(first, resolver.getNoiseBiome(1024, 0, 0));
++                return first;
++            }).get(5, TimeUnit.SECONDS));
++        }
++        verify(erosion, times(2)).sampleValue(anyInt(), anyInt(), anyInt());
++    }
++
++    private static Climate.Sampler sampler(DensitySampler.Bound erosion) {
++        return new Climate.Sampler(erosion, erosion, erosion, erosion, erosion, erosion);
++    }
++
++    @SuppressWarnings("unchecked")
++    private static HolderGetter<Biome> biomes() {
++        HolderGetter<Biome> getter = mock(HolderGetter.class);
++        for (var key : java.util.List.of(Biomes.THE_END, Biomes.END_HIGHLANDS, Biomes.END_MIDLANDS, Biomes.SMALL_END_ISLANDS, Biomes.END_BARRENS)) {
++            when(getter.getOrThrow(key)).thenReturn(mock(Holder.Reference.class));
++        }
++        return getter;
++    }
++}

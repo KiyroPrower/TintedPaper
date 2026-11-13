@@ -11,6 +11,36 @@
   },
   "decisions": [
     {
+      "source": "divinemc-server/minecraft-patches/features/0054-C2ME-The-End-Biome-Cache.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Preserve the opt-in bounded per-thread cache, scoped to each resolver/sampler instead of sharing results across samplers. Include Y in the key because 26.3 erosion sampling uses blockY. Unpackable coordinates bypass caching. Enforce capacities from 1 to 65536 even for runtime changes; capacities below 16 no longer disable eviction.",
+      "config": "performance.cache-biome.end-biomes",
+      "default": false,
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/level/biome/TheEndBiomeSource.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineEndBiomeCacheTest.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0019-Option-to-disable-saving-of-snowball-and-firework.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Keep the inherited Gale firework persistence option. Add only the missing opt-in snowball policy through DontSaveEntity, preserving the native shouldBeSaved removal/passenger rules and normal persistence by default.",
+      "config": "performance.dont-save-entity.dont-save-snowball",
+      "default": false,
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/entity/projectile/throwableitemprojectile/Snowball.java", "tintedpaper-server/minecraft-patches/features/0021-Make-saving-fireworks-configurable.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/server/rcon/RconConsoleSource.java.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Separate native RCON response lines. Move the existing Bukkit LF delimiter into the native source so plugin messages retain exactly their previous formatting instead of acquiring duplicate blank lines. Keep LF framing on every platform.",
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/server/rcon/RconConsoleSource.java", "paper-server/src/main/java/org/bukkit/craftbukkit/command/CraftRemoteConsoleCommandSender.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/sources/net/minecraft/world/level/levelgen/material/condition/SteepCondition.java.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Optional MC-258859 correction recognizes slopes in both signs on both axes. Comparisons avoid Math.abs(Integer.MIN_VALUE) overflow. Disabled by default; only future terrain generation is affected.",
+      "config": "fixes.vanilla-bug-fix.mc-258859",
+      "default": false,
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/level/levelgen/material/condition/SteepCondition.java"]
+    },
+    {
       "source": "divinemc-server/minecraft-patches/features/0048-Copper-Bulb-1gt-delay.patch",
       "status": "ported-with-adaptations",
       "reason": "Opt-in one-game-tick placement/neighbor updates reuse the native redstone/event path for all eight waxed/weathering bulb variants. Already queued ticks complete even if the configuration is subsequently disabled. Default remains immediate vanilla updates.",

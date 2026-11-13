@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 20:09:16 -0300
+Subject: [PATCH] Adapt DivineMC C2ME End biome cache to 26.3 samplers
+
+Based on DivineMC 0054 by NONPLAYT and C2ME by ishland (MIT). Scope cache to each sampler resolver and thread, include Y, validate packing and bound every capacity including small values.
+
+diff --git a/net/minecraft/world/level/biome/TheEndBiomeSource.java b/net/minecraft/world/level/biome/TheEndBiomeSource.java
+index 959f791d5007b39ddf2dfa3603e48d52b9e41594..e18ce8b812be67d62a2f3720728ed12bcda4e90d 100644
+--- a/net/minecraft/world/level/biome/TheEndBiomeSource.java
++++ b/net/minecraft/world/level/biome/TheEndBiomeSource.java
+@@ -58,7 +58,28 @@ public class TheEndBiomeSource extends BiomeSource {
+ 
+     @Override
+     public BiomeResolver createResolver(final Climate.Sampler sampler) {
+-        return (quartX, quartY, quartZ) -> this.getNoiseBiome(quartX, quartY, quartZ, sampler);
++        // TintedPaper - DivineMC/C2ME: isolate cached results by sampler, thread and all three coordinates.
++        final ThreadLocal<it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<Holder<Biome>>> cache =
++            ThreadLocal.withInitial(it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap::new);
++        return (quartX, quartY, quartZ) -> {
++            if (!org.dreeam.leaf.config.modules.opt.OptimizeBiome.endBiomeCache) {
++                return this.getNoiseBiome(quartX, quartY, quartZ, sampler);
++            }
++            long key = net.minecraft.core.BlockPos.asLong(quartX, quartY, quartZ);
++            if (net.minecraft.core.BlockPos.getX(key) != quartX || net.minecraft.core.BlockPos.getY(key) != quartY || net.minecraft.core.BlockPos.getZ(key) != quartZ) {
++                return this.getNoiseBiome(quartX, quartY, quartZ, sampler);
++            }
++            var entries = cache.get();
++            int capacity = Math.clamp(org.dreeam.leaf.config.modules.opt.OptimizeBiome.endBiomeCacheCapacity, 1, 65536);
++            while (entries.size() > capacity) entries.removeFirst();
++            Holder<Biome> biome = entries.get(key);
++            if (biome == null) {
++                biome = this.getNoiseBiome(quartX, quartY, quartZ, sampler);
++                entries.put(key, biome);
++                if (entries.size() > capacity) entries.removeFirst();
++            }
++            return biome;
++        };
+     }
+ 
+     private Holder<Biome> getNoiseBiome(final int quartX, final int quartY, final int quartZ, final Climate.Sampler sampler) {

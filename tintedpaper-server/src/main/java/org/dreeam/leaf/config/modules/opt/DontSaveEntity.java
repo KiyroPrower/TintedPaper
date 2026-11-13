@@ -11,6 +11,7 @@ public class DontSaveEntity extends ConfigModule {
 
     public static boolean dontSavePrimedTNT = false;
     public static boolean dontSaveFallingBlock = false;
+    public static volatile boolean dontSaveSnowball = false;
 
     @Override
     public void onLoaded() {
@@ -23,5 +24,7 @@ public class DontSaveEntity extends ConfigModule {
                     区块卸载时不保存掉落的方块和激活的 TNT,
                     可以避免在玩家掉线时机器被炸毁."""));
         dontSaveFallingBlock = globalConfig.getBoolean(basePath() + ".dont-save-falling-block", dontSaveFallingBlock);
+        dontSaveSnowball = globalConfig.getBoolean(basePath() + ".dont-save-snowball", dontSaveSnowball,
+            "Omit snowballs from chunk persistence. Disabled by default; enabling this intentionally discards them across reloads.");
     }
 }

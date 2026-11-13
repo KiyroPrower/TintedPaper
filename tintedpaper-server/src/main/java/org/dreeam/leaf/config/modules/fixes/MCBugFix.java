@@ -17,9 +17,12 @@ public class MCBugFix extends ConfigModule {
     public static boolean mc301114 = false;
     public static int mc301114maxCombatEntries = 10240;
     public static boolean mc152094 = false;
+    public static volatile boolean mc258859 = false;
 
     @Override
     public void onLoaded() {
+        mc258859 = globalConfig.getBoolean(basePath() + ".mc-258859", mc258859,
+            "Use all four slope directions for surface steepness. Only affects newly generated terrain.");
         globalConfig.addCommentRegionBased(basePath(),
             "Fixes for vanilla Minecraft bugs.",
             "针对 Minecraft 原版的漏洞修复。"

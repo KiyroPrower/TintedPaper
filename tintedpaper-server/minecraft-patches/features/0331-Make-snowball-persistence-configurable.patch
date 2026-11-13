@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sun, 23 Feb 2025 01:04:29 +0300
+Subject: [PATCH] Make snowball persistence configurable
+
+
+diff --git a/net/minecraft/world/entity/projectile/throwableitemprojectile/Snowball.java b/net/minecraft/world/entity/projectile/throwableitemprojectile/Snowball.java
+index d251c3a2372e8ab4bec6baa9f7c1dccf86d2580e..f946e7941625c6dd2342c544878e70fc9fa097d4 100644
+--- a/net/minecraft/world/entity/projectile/throwableitemprojectile/Snowball.java
++++ b/net/minecraft/world/entity/projectile/throwableitemprojectile/Snowball.java
+@@ -103,4 +103,14 @@ public class Snowball extends ThrowableItemProjectile {
+             this.discard(org.bukkit.event.entity.EntityRemoveEvent.Cause.HIT); // CraftBukkit - add Bukkit remove cause
+         }
+     }
++
++    // DivineMC start - Option to disable snowball saving
++    @Override
++    public boolean shouldBeSaved() {
++        if (org.dreeam.leaf.config.modules.opt.DontSaveEntity.dontSaveSnowball) {
++            return false;
++        }
++        return super.shouldBeSaved();
++    }
++    // DivineMC end - Option to disable snowball saving
+ }

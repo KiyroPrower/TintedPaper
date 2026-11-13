@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 20:03:55 -0300
+Subject: [PATCH] Port DivineMC RCON message separation and optional slope fix
+
+Adapted from BX-Team/DivineMC a02492aa29a22f98066fd2a7ac946f310b6f9ece. Preserve LF framing with the Bukkit sender and avoid Math.abs overflow.
+
+diff --git a/net/minecraft/server/rcon/RconConsoleSource.java b/net/minecraft/server/rcon/RconConsoleSource.java
+index 1df41d0c6fafc3f65544b60a2ce84a3f2a16b3fc..f89df1ae2810b47b6e6f1bd8d6d12fbf3739b790 100644
+--- a/net/minecraft/server/rcon/RconConsoleSource.java
++++ b/net/minecraft/server/rcon/RconConsoleSource.java
+@@ -51,7 +51,7 @@ public class RconConsoleSource implements CommandSource {
+ 
+     @Override
+     public void sendSystemMessage(final Component message) {
+-        this.buffer.append(message.getString());
++        this.buffer.append(message.getString()).append('\n'); // TintedPaper - DivineMC - MC-7569
+     }
+ 
+     @Override
+diff --git a/net/minecraft/world/level/levelgen/material/condition/SteepCondition.java b/net/minecraft/world/level/levelgen/material/condition/SteepCondition.java
+index 36dfab6a90d8c4455536cb064716398455148b99..121ac5cc53f6165678d9fc04ac8f5baf8370e47a 100644
+--- a/net/minecraft/world/level/levelgen/material/condition/SteepCondition.java
++++ b/net/minecraft/world/level/levelgen/material/condition/SteepCondition.java
+@@ -18,6 +18,12 @@ public enum SteepCondition implements MaterialCondition {
+         return new MaterialRuleContext.LazyXZCondition(context) {
+             @Override
+             protected boolean compute() {
++                // TintedPaper - DivineMC - MC-258859; comparisons also handle Integer.MIN_VALUE.
++                if (org.dreeam.leaf.config.modules.fixes.MCBugFix.mc258859) {
++                    int x = this.context.surfaceGradientX();
++                    int z = this.context.surfaceGradientZ();
++                    return x <= -4 || x >= 4 || z <= -4 || z >= 4;
++                }
+                 return this.context.surfaceGradientX() <= -4 || this.context.surfaceGradientZ() >= 4;
+             }
+         };
