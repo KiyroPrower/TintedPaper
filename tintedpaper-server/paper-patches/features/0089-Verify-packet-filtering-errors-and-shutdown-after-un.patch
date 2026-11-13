@@ -1,0 +1,61 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 20:22:56 -0300
+Subject: [PATCH] Verify packet filtering errors and shutdown after unused
+ instrumentation removal
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivinePacketProcessingTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivinePacketProcessingTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..b5fbc3848f3eee8bfa9c7681d1365a29ce272536
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivinePacketProcessingTest.java
+@@ -0,0 +1,48 @@
++package org.bukkit.craftbukkit.tinted;
++
++import net.minecraft.network.PacketListener;
++import net.minecraft.network.PacketProcessor;
++import net.minecraft.network.protocol.Packet;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DivinePacketProcessingTest {
++    @Test
++    @SuppressWarnings("unchecked")
++    void packetFilteringAndErrorReportingRemainIntact() {
++        PacketProcessor processor = new PacketProcessor(Thread.currentThread());
++        PacketListener listener = mock(PacketListener.class);
++        Packet<PacketListener> packet = mock(Packet.class);
++        when(listener.shouldHandleMessage(packet)).thenReturn(false);
++        processor.scheduleIfPossible(listener, packet);
++        assertTrue(processor.executeSinglePacket());
++        verify(packet, never()).handle(listener);
++        when(listener.shouldHandleMessage(packet)).thenReturn(true);
++        RuntimeException failure = new IllegalStateException("packet fixture");
++        doThrow(failure).when(packet).handle(listener);
++        processor.scheduleIfPossible(listener, packet);
++        assertTrue(processor.executeSinglePacket());
++        verify(listener).onPacketError(packet, failure);
++        assertFalse(processor.executeSinglePacket());
++    }
++
++    @Test
++    @SuppressWarnings("unchecked")
++    void fatalErrorsPropagateAndShutdownStillRejectsPackets() {
++        PacketProcessor processor = new PacketProcessor(Thread.currentThread());
++        PacketListener listener = mock(PacketListener.class);
++        Packet<PacketListener> packet = mock(Packet.class);
++        when(listener.shouldHandleMessage(packet)).thenReturn(true);
++        OutOfMemoryError failure = new OutOfMemoryError("synthetic fixture");
++        doThrow(failure).when(packet).handle(listener);
++        processor.scheduleIfPossible(listener, packet);
++        assertSame(failure, assertThrows(OutOfMemoryError.class, processor::executeSinglePacket));
++        assertFalse(processor.executeSinglePacket());
++        processor.close();
++        assertThrows(io.papermc.paper.util.ServerStopRejectedExecutionException.class, () -> processor.scheduleIfPossible(listener, packet));
++    }
++}

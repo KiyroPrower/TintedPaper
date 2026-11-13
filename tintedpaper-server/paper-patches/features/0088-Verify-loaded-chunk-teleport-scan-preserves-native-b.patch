@@ -1,0 +1,105 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 20:18:52 -0300
+Subject: [PATCH] Verify loaded chunk teleport scan preserves native bounds and
+ capture semantics
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineRandomTeleportTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineRandomTeleportTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..ef3f3ad381e3fe9ff8fd45dd38dd6bb6968aee97
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineRandomTeleportTest.java
+@@ -0,0 +1,92 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.util.ArrayList;
++import java.util.List;
++import net.minecraft.core.BlockPos;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.entity.LivingEntity;
++import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.border.WorldBorder;
++import net.minecraft.world.level.chunk.LevelChunk;
++import org.bukkit.event.player.PlayerTeleportEvent.TeleportCause;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.opt.OptimizeRandomTeleport;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.ArgumentMatchers.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DivineRandomTeleportTest {
++    @Test
++    void loadedChunkScanKeepsWorldBoundsAndOriginalSearchOrder() {
++        boolean previous = OptimizeRandomTeleport.enabled;
++        try {
++            List<BlockPos> baseline = new ArrayList<>();
++            List<BlockPos> optimized = new ArrayList<>();
++            for (boolean enabled : new boolean[]{false, true}) {
++                OptimizeRandomTeleport.enabled = enabled;
++                ServerLevel level = level();
++                LevelChunk chunk = mock(LevelChunk.class);
++                when(level.getChunkIfLoaded(any(BlockPos.class))).thenReturn(chunk);
++                when(level.hasChunkAt(any(BlockPos.class))).thenReturn(true);
++                when(level.isInValidBounds(any(BlockPos.class))).thenAnswer(call -> call.<BlockPos>getArgument(0).getY() < 4);
++                List<BlockPos> visited = enabled ? optimized : baseline;
++                BlockState state = mock(BlockState.class);
++                when(level.getBlockState(any(BlockPos.class))).thenAnswer(call -> {
++                    visited.add(call.<BlockPos>getArgument(0).immutable());
++                    return state;
++                });
++                when(chunk.getBlockState(any(BlockPos.class))).thenAnswer(call -> {
++                    visited.add(call.<BlockPos>getArgument(0).immutable());
++                    return state;
++                });
++                assertEquals(LivingEntity.RandomTeleportResult.FAILURE, entity(level).randomTeleport(2, 8, 3, false, state1 -> false, TeleportCause.UNKNOWN));
++                verify(level, times(enabled ? 1 : 0)).getChunkIfLoaded(any(BlockPos.class));
++                verify(level, times(enabled ? 4 : 8)).getBlockState(any(BlockPos.class));
++                verify(chunk, times(enabled ? 4 : 0)).getBlockState(any(BlockPos.class));
++            }
++            assertEquals(8, baseline.size());
++            assertEquals(new BlockPos(2, 7, 3), baseline.getFirst());
++            assertEquals(new BlockPos(2, 0, 3), baseline.getLast());
++            assertEquals(baseline, optimized);
++        } finally {
++            OptimizeRandomTeleport.enabled = previous;
++        }
++    }
++
++    @Test
++    void capturedTreeStatesAndMissingChunksStayOnTheNativePath() {
++        boolean previous = OptimizeRandomTeleport.enabled;
++        try {
++            OptimizeRandomTeleport.enabled = true;
++            ServerLevel level = level();
++            level.captureTreeGeneration = true;
++            when(level.hasChunkAt(any(BlockPos.class))).thenReturn(true);
++            when(level.getBlockState(any(BlockPos.class))).thenReturn(mock(BlockState.class));
++            assertEquals(LivingEntity.RandomTeleportResult.FAILURE, entity(level).randomTeleport(2, 3, 3, false, state -> false, TeleportCause.UNKNOWN));
++            verify(level, never()).getChunkIfLoaded(any(BlockPos.class));
++            verify(level, times(3)).getBlockState(any(BlockPos.class));
++            ServerLevel missing = level();
++            assertEquals(LivingEntity.RandomTeleportResult.FAILURE, entity(missing).randomTeleport(2, 3, 3, false, state -> false, TeleportCause.UNKNOWN));
++            verify(missing, never()).getBlockState(any(BlockPos.class));
++        } finally {
++            OptimizeRandomTeleport.enabled = previous;
++        }
++    }
++
++    private static ServerLevel level() {
++        ServerLevel level = mock(ServerLevel.class);
++        WorldBorder border = new WorldBorder();
++        when(level.getWorldBorder()).thenReturn(border);
++        when(level.getMinY()).thenReturn(0);
++        return level;
++    }
++
++    private static LivingEntity entity(ServerLevel level) {
++        LivingEntity entity = mock(LivingEntity.class, CALLS_REAL_METHODS);
++        doReturn(level).when(entity).level();
++        return entity;
++    }
++}
