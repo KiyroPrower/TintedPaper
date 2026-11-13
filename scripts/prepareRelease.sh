@@ -5,11 +5,11 @@ IS_EOL=false
 IS_UNSUPPORTED=false
 IS_DEV=true
 
-JAR_NAME="leaf-${MC_VERSION}"
+JAR_NAME="tintedpaper-${MC_VERSION}"
 CURRENT_TAG="ver-${MC_VERSION}"
 RELEASE_NOTES="release_notes.md"
 
-# Rename Leaf jar
+# Rename distribution artifact
 mv ./leaf-server/build/libs/leaf-leafclip-${MC_VERSION}*.jar ./$JAR_NAME-${BUILD_NUMBER}.jar
 
 # Branch name
@@ -75,7 +75,7 @@ if [ $IS_EOL = true ]; then
   {
     echo ""
     echo "> [!WARNING]"
-    echo "> This version of Leaf is end-of-life and will only receive critical bugfixes from upstream."
+    echo "> This version of TintedPaper is end-of-life and will only receive critical bugfixes from upstream."
     echo "> Update to latest version and gain better performance!"
   } >> $RELEASE_NOTES
 fi
@@ -85,7 +85,7 @@ if [ $IS_UNSUPPORTED = true ]; then
   {
     echo ""
     echo "> [!CAUTION]"
-    echo "> This version of Leaf is unsupported and will not receive any bugfixes."
+    echo "> This version of TintedPaper is unsupported and will not receive any bugfixes."
     echo "> Use at your own risk!"
   } >> $RELEASE_NOTES
 fi

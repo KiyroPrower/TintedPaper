@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before reporting an issue, make sure you are running the latest build of Leaf and checked for duplicate issues in [Issues](https://github.com/Winds-Studio/Leaf/issues) and the [Leaf docs](https://www.leafmc.one/docs)!
+        Before reporting an issue, check the current TintedPaper build, [existing issues](https://github.com/KiyroPrower/TintedPaper/issues) and [documentation](https://github.com/KiyroPrower/TintedPaper#readme).
 
   - type: checkboxes
     attributes:
@@ -18,7 +18,7 @@ body:
           required: true
         - label: I ticked all the boxes without actually reading them
           required: false
-        - label: I am using latest Leaf build from https://www.leafmc.one/download
+        - label: I am using the current TintedPaper build from https://github.com/KiyroPrower/TintedPaper/actions/workflows/build-263.yml
           required: true
         - label: I tested and couldn't replicate this issue on latest [Paper](https://papermc.io/downloads/paper) or [Purpur](https://purpurmc.org/download/purpur) build
           required: true

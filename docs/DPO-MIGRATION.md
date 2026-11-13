@@ -137,7 +137,8 @@ New changes use applied-source Git commits, not edits to patch text:
 
 The native config source, this ledger and the inventory script are ordinary root
 repository files; they must be included with the generated patches when the owner
-commits the batch. Root commits, pushes, merging and deployment have not been done.
+commits the batch. The owner authorized committing and publishing the validated
+batch on 2026-11-13. Production deployment remains outside this update.
 
 The contributing guide's `rebuildPatches` abbreviation is ambiguous with the
 current paperweight version. Use:

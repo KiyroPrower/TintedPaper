@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Leaf is a high-performance Paper fork.
+TintedPaper is an AI-driven Paper fork focused on native datapack optimizations, performance, vanilla mechanics and stability.
 
 ## Allowed scope
 

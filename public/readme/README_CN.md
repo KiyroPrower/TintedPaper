@@ -1,156 +1,41 @@
+# TintedPaper
 
-<img src="../image/leaf_banner.png" alt="Leaf">
-<div align="center">
-
-[![下载](https://img.shields.io/badge/releases-blue?label=%e4%b8%8b%e8%bd%bd&style=for-the-badge&colorA=19201a&colorB=298046)](https://www.leafmc.one/zh/download)⠀
-[![Github Actions 构建](https://img.shields.io/github/actions/workflow/status/Winds-Studio/Leaf/build-263.yml?label=%e6%9e%84%e5%bb%ba&style=for-the-badge&colorA=19201a&colorB=298046)](https://github.com/Winds-Studio/Leaf/actions)⠀
-![QQ](https://img.shields.io/badge/619278377-blue?label=QQ%e7%be%a4&style=for-the-badge&colorA=19201a&colorB=298046)
-[![文档](https://img.shields.io/badge/leafmc.one/zh/docs-blue?label=%e6%96%87%e6%a1%a3&style=for-the-badge&colorA=19201a&colorB=298046)](https://www.leafmc.one/zh/docs/getting-started)
-
-**Leaf** 是一个基于 [Paper](https://papermc.io/) 的分支，专为高自定义和高性能而设计。
-</div>
-
-> [!WARNING]
-> Leaf 是一个面向性能的分支。在迁移到 Leaf 之前，请务必**提前备份**。欢迎任何人贡献优化或报告问题来帮助我们改进。
+**TintedPaper 是一个 AI-driven（人工智能驱动）的 Paper 分支，专注于 Minecraft 数据包原生优化、性能、原版机制和稳定性。**
 
 [English](../../README.md) | **中文**
 
-## 🍃 特点
-- **基于 [Paper](https://papermc.io/)**，以获得更好的性能和灵活的 API
-- **异步**寻路、生物生成和实体追踪
-- **大量优化**融合自 [其他核心](#-致谢) 和我们自己的补丁
-- **完全兼容** Spigot 和 Paper 插件
-- **最新依赖**，保持所有依赖项为最新版本
-- **允许用户名使用所有字符**，包括中文和其他字符
-- **修复**一些 Minecraft 的 bug
-- **模组协议**支持
-- **更多自定义配置项**，源自 [Purpur](https://github.com/PurpurMC/Purpur) 的特性
-- **线性区域文件格式**，节省磁盘空间
-- **运维友好**，集成 [Pufferfish](https://github.com/pufferfish-gg/Pufferfish) 的 [Sentry](https://sentry.io/welcome/)，轻松详细追踪服务器的所有报错
-- 以及更多...
+## AI 驱动开发
 
-## 📈 bStats 统计
-[![bStats Graph Data](https://bstats.org/signatures/server-implementation/Leaf.svg)](https://bstats.org/plugin/server-implementation/Leaf)
+Codex、Claude 等 AI 代理参与代码分析、实现、上游比较和回归测试。更改仍需维护者审查和验证；使用 AI 不代表代码已经正确，也不代表性能提升已经得到测量。
 
-## 📫 联系方式
-- Discord: [`https://discord.com/invite/gfgAwdSEuM`](https://discord.com/invite/gfgAwdSEuM)
-- QQ社区群: `619278377`
+本项目正在将 [DatapackOptimizer](https://github.com/KiyroPrower/DatapackOptimizer) 从插件迁移为原生服务器补丁。每个迁移项都会与当前服务器实现比较，复用现有优化并排除过时补丁。
 
-## 📫 赞助
-如果您喜欢我们的工作，欢迎通过我们的 [Open Collective](https://opencollective.com/Winds-Studio) 或 [Dreeam 的爱发电](https://afdian.com/a/Dreeam) 进行赞助 :)
+## 当前状态
 
-## 📥 下载
-从我们的 [官网](https://www.leafmc.one/zh/download) 下载 Leaf，或在 [GitHub Releases](https://github.com/Winds-Studio/Leaf/releases) 获取最新构建版本
+- 目标版本：Minecraft **26.3**，需要 **Java 25**。
+- 迁移尚未完成。已验证的工作和待办项见[迁移报告](../../docs/DPO-MIGRATION.md)及[迁移清单](../../docs/dpo-port-decisions.json)。
+- 插件、数据包兼容性及 TPS/MSPT 性能变化仍需运行时验证。
 
-## 📄 文档
-关于如何使用/配置 Leaf 的文档：[Leaf 文档](https://www.leafmc.one/zh/docs/getting-started)
+## 构建与支持
 
-## 📦 构建
-构建用于分发的 JAR：
-```bash
-./gradlew applyAllPatches && ./gradlew createLeafclipJar
+- [构建与开发构件](https://github.com/KiyroPrower/TintedPaper/actions/workflows/build-263.yml)
+- [发行版本](https://github.com/KiyroPrower/TintedPaper/releases)
+- [问题反馈与功能建议](https://github.com/KiyroPrower/TintedPaper/issues)
+- [贡献指南](../../CONTRIBUTING.md)
+
+CI 上传开发构件，不会自动发布稳定版或部署服务器。
+
+## 本地构建
+
+```powershell
+.\gradlew.bat applyAllPatches
+.\gradlew.bat :leaf-server:test createLeafclipJar
 ```
 
-## 📦 API
-<details>
-<summary>点击展开</summary>
+Linux/macOS 使用 `./gradlew`。为保持补丁系统兼容性，内部模块与构建任务保留原有标识。构件位于 `leaf-server/build/libs/`。
 
-### Gradle
-```kotlin
-repositories {
-  maven {
-    url = uri("https://maven.leafmc.one/snapshots/")
-  }
-}
+## 许可证与上游致谢
 
-dependencies {
-    compileOnly("cn.dreeam.leaf:leaf-api:26.3.local-SNAPSHOT")
-}
+TintedPaper 基于 [Paper](https://github.com/PaperMC/Paper)、[上游实现](https://github.com/Winds-Studio/Leaf)，以及 Gale、Pufferfish、Purpur、Moonrise、Lithium 和补丁头中注明的其他项目。原作者和许可证声明保持不变。
 
-java {
-  toolchain.languageVersion.set(JavaLanguageVersion.of(25))
-}
-```
-
-### Maven
-```xml
-<repository>
-    <id>leafmc</id>
-    <url>https://maven.leafmc.one/snapshots/</url>
-</repository>
-```
-```xml
-<dependency>
-    <groupId>cn.dreeam.leaf</groupId>
-    <artifactId>leaf-api</artifactId>
-    <version>26.3.local-SNAPSHOT</version>
-    <scope>provided</scope>
-</dependency>
-```
-</details>
-
-## ⚖️ 许可证
-Leaf 根据其上游项目采用多种开源许可证授权。请参阅 [LICENSE.md](../../LICENSE.md) 了解完整的详细信息。
-
-## 📜 致谢
-感谢以下项目。Leaf 包含了一些取自这些项目的补丁。<br>
-如果没有这些优秀的项目，Leaf 就不会变得如此出色。
-
-- [Gale](https://github.com/Dreeam-qwq/Gale) ([原始仓库](https://github.com/GaleMC/Gale))
-- [Pufferfish](https://github.com/pufferfish-gg/Pufferfish)
-- [Purpur](https://github.com/PurpurMC/Purpur)
-- <details>
-    <summary>🍴 展开查看 Leaf 采用补丁的核心</summary>
-    <p>
-      • <a href="https://github.com/KeYiMC/KeYi">KeYi</a> (R.I.P.)
-        <a href="https://github.com/MikuMC/KeYiBackup">(备份仓库)</a><br>
-      • <a href="https://github.com/etil2jz/Mirai">Mirai</a><br>
-      • <a href="https://github.com/Bloom-host/Petal">Petal</a><br>
-      • <a href="https://github.com/fxmorin/carpet-fixes">Carpet Fixes</a><br>
-      • <a href="https://github.com/Akarin-project/Akarin">Akarin</a><br>
-      • <a href="https://github.com/Cryptite/Slice">Slice</a><br>
-      • <a href="https://github.com/ProjectEdenGG/Parchment">Parchment</a><br>
-      • <a href="https://github.com/LeavesMC/Leaves">Leaves</a><br>
-      • <a href="https://github.com/KaiijuMC/Kaiiju">Kaiiju</a><br>
-      • <a href="https://github.com/PlazmaMC/PlazmaBukkit">Plazma</a><br>
-      • <a href="https://github.com/SparklyPower/SparklyPaper">SparklyPaper</a><br>
-      • <a href="https://github.com/HaHaWTH/Polpot">Polpot</a><br>
-      • <a href="https://github.com/plasmoapp/matter">Matter</a><br>
-      • <a href="https://github.com/LuminolMC/Luminol">Luminol</a><br>
-      • <a href="https://github.com/Gensokyo-Reimagined/Nitori">Nitori</a><br>
-      • <a href="https://github.com/Tuinity/Moonrise">Moonrise</a> (在 1.21.1 期间)<br> 
-      • <a href="https://github.com/Samsuik/Sakura">Sakura</a><br> 
-    </p>
-</details>
-
-## 🔥 特别感谢
-<table>
-  <tr>
-    <td width="50%" align="center">
-      <a href="https://cloud.swordsman.com.cn/?i8ab42c">
-        <img src="../image/JiankeServer.jpg" alt="Jianke Cloud Host" width="250">
-      </a>
-      <br>
-      <b>剑客云 | cloud of swordsman</b>
-      <p>如果你想找一个低价高性能、低延迟的云服务商，剑客云是个不错的选择！你可以在 <a href="https://cloud.swordsman.com.cn/?i8ab42c">这里</a> 注册。</p>
-      <p>If you want to find a cheaper, high performance, stable, lower latency host, then cloud of swordsman is a good choice! Registers and purchases in <a href="https://cloud.swordsman.com.cn/?i8ab42c">here</a>.</p>
-    </td>
-    <td width="50%" align="center">
-      <a href="https://www.rainyun.com/NzE2NTc1_">
-        <img src="../image/RainYun.jpg" alt="雨云" width="250">
-      </a>
-      <br>
-      <b>雨云 | RainYun</b>
-      <p>国际多线路选择，配套云存储 — 购买服务后七天内不满意可以申请退订，强大的技术支持团队和高在线率客服。雨云云服务器，用稳定和性价比，助力您快速上云。点击前往 <a href="https://www.rainyun.com/NzE2NTc1_">雨云</a>。</p>
-      <p>Global multi-line routing with cloud storage. Refund available within 7 days. Reliable uptime and expert support. RainYun — stable, cost-effective, and ready for fast cloud deployment. Visit <a href="https://www.rainyun.com/NzE2NTc1_">RainYun</a>.</p>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center">
-      <a href="https://www.yourkit.com/">
-        <img src="https://www.yourkit.com/images/yklogo.png" alt="YourKit" width="300">
-      </a>
-      <p>YourKit 通过创新和智能的工具支持开源项目，用于监控和分析 Java 和 .NET 应用程序。YourKit 是 <a href="https://www.yourkit.com/java/profiler/">YourKit Java Profiler</a>、<a href="https://www.yourkit.com/dotnet-profiler/">YourKit .NET Profiler</a> 和 <a href="https://www.yourkit.com/youmonitor/">YourKit YouMonitor</a> 的创造者。</p>
-    </td>
-  </tr>
-</table>
+完整条款见 [LICENSE.md](../../LICENSE.md)、[许可证目录](../../licenses)及各补丁头。项目更名不会转移上游工作的作者身份。
