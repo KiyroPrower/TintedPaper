@@ -1,0 +1,144 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 08:42:44 -0300
+Subject: [PATCH] Cover fish recruitment ghast heading and note placement
+ controls
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/EntityAndPlacementPortsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/EntityAndPlacementPortsTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..55bc2801619b7c0bf651d50c30eccbf6a9aa68f1
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/EntityAndPlacementPortsTest.java
+@@ -0,0 +1,131 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.papermc.paper.configuration.GlobalConfiguration;
++import java.util.List;
++import net.minecraft.core.BlockPos;
++import net.minecraft.world.entity.LivingEntity;
++import net.minecraft.world.entity.Mob;
++import net.minecraft.world.entity.ai.goal.FollowFlockLeaderGoal;
++import net.minecraft.world.entity.animal.fish.AbstractSchoolingFish;
++import net.minecraft.world.entity.monster.Ghast;
++import net.minecraft.world.item.context.BlockPlaceContext;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.NoteBlock;
++import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
++import net.minecraft.world.phys.AABB;
++import net.minecraft.world.phys.Vec3;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.opt.DatapackOptimizations;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class EntityAndPlacementPortsTest {
++    @Test
++    void noteBlockPlacementKeepsInstrumentAndHonorsBothControls() {
++        boolean previous = DatapackOptimizations.noteBlockPlacePowered;
++        boolean frozen = GlobalConfiguration.get().blockUpdates.disableNoteblockUpdates;
++        Level level = mock(Level.class);
++        BlockPlaceContext context = mock(BlockPlaceContext.class);
++        when(context.getLevel()).thenReturn(level);
++        when(context.getClickedPos()).thenReturn(BlockPos.ZERO);
++        when(level.getBlockState(BlockPos.ZERO.above())).thenReturn(Blocks.AIR.defaultBlockState());
++        when(level.getBlockState(BlockPos.ZERO.below())).thenReturn(Blocks.GOLD_BLOCK.defaultBlockState());
++        when(level.hasNeighborSignal(BlockPos.ZERO)).thenReturn(true);
++        try {
++            GlobalConfiguration.get().blockUpdates.disableNoteblockUpdates = false;
++            DatapackOptimizations.noteBlockPlacePowered = false;
++            BlockState nativeState = Blocks.NOTE_BLOCK.getStateForPlacement(context);
++            assertFalse(nativeState.getValue(NoteBlock.POWERED));
++            assertEquals(NoteBlockInstrument.BELL, nativeState.getValue(NoteBlock.INSTRUMENT));
++            verify(level, never()).hasNeighborSignal(any());
++            DatapackOptimizations.noteBlockPlacePowered = true;
++            assertEquals(nativeState.setValue(NoteBlock.POWERED, true), Blocks.NOTE_BLOCK.getStateForPlacement(context));
++            when(level.hasNeighborSignal(BlockPos.ZERO)).thenReturn(false);
++            assertEquals(nativeState, Blocks.NOTE_BLOCK.getStateForPlacement(context));
++            GlobalConfiguration.get().blockUpdates.disableNoteblockUpdates = true;
++            clearInvocations(level);
++            assertSame(Blocks.NOTE_BLOCK.defaultBlockState(), Blocks.NOTE_BLOCK.getStateForPlacement(context));
++            verifyNoInteractions(level);
++        } finally {
++            DatapackOptimizations.noteBlockPlacePowered = previous;
++            GlobalConfiguration.get().blockUpdates.disableNoteblockUpdates = frozen;
++        }
++    }
++
++    @Test
++    void recruitingFishDoesNotBreakAnExistingSchool() {
++        boolean previous = DatapackOptimizations.fishSchoolLeader;
++        AbstractSchoolingFish searching = mock(AbstractSchoolingFish.class);
++        AbstractSchoolingFish leader = mock(AbstractSchoolingFish.class);
++        AbstractSchoolingFish otherLeader = mock(AbstractSchoolingFish.class);
++        AbstractSchoolingFish recruit = mock(AbstractSchoolingFish.class);
++        AbstractSchoolingFish follower = mock(AbstractSchoolingFish.class);
++        Level level = mock(Level.class);
++        when(searching.level()).thenReturn(level);
++        when(searching.getBoundingBox()).thenReturn(new AABB(0, 0, 0, 1, 1, 1));
++        when(leader.canBeFollowed()).thenReturn(true);
++        when(leader.hasFollowers()).thenReturn(true);
++        when(otherLeader.hasFollowers()).thenReturn(true);
++        when(follower.isFollower()).thenReturn(true);
++        when(leader.getMaxSchoolSize()).thenReturn(8);
++        leader.schoolSize = 2;
++        doCallRealMethod().when(leader).addFollowers(any());
++        doReturn(List.of(leader, otherLeader, follower, recruit, searching))
++            .when(level).getEntitiesOfClass(any(), any(), any());
++        try {
++            for (boolean enabled : new boolean[] {true, false}) {
++                DatapackOptimizations.fishSchoolLeader = enabled;
++                clearInvocations(leader, otherLeader, follower, recruit, searching);
++                new FollowFlockLeaderGoal(searching) {
++                    @Override
++                    protected int nextStartTick(AbstractSchoolingFish fish) {
++                        return 0;
++                    }
++                }.canUse();
++                verify(recruit).startFollowing(leader);
++                verify(searching).startFollowing(leader);
++                verify(follower, never()).startFollowing(any());
++                verify(leader, never()).startFollowing(any());
++                verify(otherLeader, times(enabled ? 0 : 1)).startFollowing(leader);
++            }
++        } finally {
++            DatapackOptimizations.fishSchoolLeader = previous;
++        }
++    }
++
++    @Test
++    void idleGhastsKeepHeadingButMovingAndTargetingStillTurn() {
++        boolean previous = DatapackOptimizations.ghastIdleDirection;
++        Mob ghast = mock(Mob.class);
++        ghast.yBodyRot = 73.0F;
++        when(ghast.getDeltaMovement()).thenReturn(new Vec3(0, 1, 0));
++        try {
++            DatapackOptimizations.ghastIdleDirection = true;
++            Ghast.faceMovementDirection(ghast);
++            verify(ghast, never()).setYRot(anyFloat());
++            assertEquals(73.0F, ghast.yBodyRot);
++            when(ghast.getDeltaMovement()).thenReturn(new Vec3(0.1, 0, 0));
++            Ghast.faceMovementDirection(ghast);
++            verify(ghast).setYRot(-90.0F);
++            clearInvocations(ghast);
++            when(ghast.getDeltaMovement()).thenReturn(Vec3.ZERO);
++            LivingEntity target = mock(LivingEntity.class);
++            when(ghast.getTarget()).thenReturn(target);
++            when(target.getX()).thenReturn(1.0D);
++            Ghast.faceMovementDirection(ghast);
++            verify(ghast).setYRot(-90.0F);
++            clearInvocations(ghast);
++            when(ghast.getTarget()).thenReturn(null);
++            DatapackOptimizations.ghastIdleDirection = false;
++            Ghast.faceMovementDirection(ghast);
++            verify(ghast).setYRot(anyFloat());
++        } finally {
++            DatapackOptimizations.ghastIdleDirection = previous;
++        }
++    }
++}

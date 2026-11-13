@@ -11,10 +11,10 @@ This is an incomplete migration, not a replacement release for DPO.
 
 | Active injections | Decision |
 | --- | --- |
-| 10 | Native behaviour implemented and local regression suite passed |
+| 13 | Native behaviour implemented and local regression suite passed |
 | 36 | Equivalent mechanism verified in the pinned TintedPaper/Paper baseline |
 | 6 | Removed 26.2 noise pipeline or DivineMC-only implementation |
-| 405 | Native target found; semantic comparison still pending |
+| 402 | Native target found; semantic comparison still pending |
 | 1 | External target still needs source resolution |
 
 The source manifests contain 458 active injections. Matching a target file is
@@ -65,6 +65,15 @@ decision entries fail rather than disappearing from the inventory.
   archive rebuilds it. Index construction costs O(N log N) time and O(N) retained
   entry metadata, replacing repeated full scans with prefix lookup and sorting
   only the matching entries. Namespace discovery remains on the native path.
+- Opt-in note block placement initializes its powered state after native instrument
+  selection, preventing a stray note on a later update. Paper's disabled note
+  block updates still bypass both instrument and power checks. Default is false.
+- Fish recruitment excludes fish that already lead a school, before applying the
+  native school-size limit. Existing follower checks, spawn and AI timing remain
+  native. This independently ports the FishNoStuck leader guard, enabled by default.
+- Idle ghasts preserve heading below 0.1 blocks/tick of horizontal movement without
+  an attack target. Moving and targeting retain native rotation. The shared helper
+  also serves the happy ghast's fallback look control, matching the original port.
 
 Validation also exposed two inherited issues addressed in isolated patches:
 SNBT's grammar shared mutable empty lists/maps between separate parsed documents,
@@ -90,6 +99,9 @@ tintedpaper:
     scoreboard-team-null-member: true
     scoreboard-tracked-players-race: true
     moving-blocks-destroy-path: true
+    note-block-place-powered: false
+    fish-school-leader: true
+    ghast-idle-direction: true
 ```
 
 The old DPO plugin flags do not control these new native implementations. The
@@ -137,8 +149,8 @@ over the same native changes during rollout.
 The pre-existing patch 0315 for missing recipe references is preserved.
 New changes use applied-source Git commits, not edits to patch text:
 
-- Minecraft features 0316 through 0323.
-- Paper server regression/compatibility features 0069 through 0076.
+- Minecraft features 0316 through 0324.
+- Paper server regression/compatibility features 0069 through 0077.
 - Native TintedPaper configuration source
   `leaf-server/src/main/java/org/dreeam/leaf/config/modules/opt/DatapackOptimizations.java`.
 
@@ -189,20 +201,26 @@ invalid paths, index release and archive reopening, shared overlay ownership and
 priority, and a native closed-ZIP failure when a callback closes the pack. All
 four passed after complete patch reapplication.
 
+Three `EntityAndPlacementPortsTest` regressions cover powered note block placement
+without losing instrument selection, both config controls including Paper's
+freeze option, fish recruitment with and without leader protection, and ghast
+rotation for vertical-only movement, the horizontal threshold, attack targets and
+the disabled toggle. All three passed after complete patch reapplication.
+
 After regenerating and fully reapplying the patches, this command succeeded:
 
 ```powershell
 .\gradlew.bat :leaf-server:test createLeafclipJar
 ```
 
-The resulting JUnit XML reports contain 10,184 cases: 10,098 passed, zero failed
+The resulting JUnit XML reports contain 10,187 cases: 10,101 passed, zero failed
 and 86 skipped. All twelve `DatapackPortsTest` and all four `ZipPackIndexTest`
-cases passed with no skips. The
+cases, plus all three `EntityAndPlacementPortsTest` cases, passed with no skips. The
 existing Gradle exclusion for the `Slow` tag remains in effect.
 
 The current distribution artifact is
-`leaf-server/build/libs/leaf-leafclip-26.3.local-SNAPSHOT.jar` (28,354,301 bytes),
-SHA-256 `78c2783d93a99d7c7d719e0ad196df35740dbd96af77ded9a24138b949785cf0`.
+`leaf-server/build/libs/leaf-leafclip-26.3.local-SNAPSHOT.jar` (28,355,302 bytes),
+SHA-256 `4445a981957824ac06cb47c83fdf98d142a951d01f74f71ec4d98596ac201967`.
 It still uses inherited technical filenames and runtime identifiers. No server startup,
 production deployment, TPS/MSPT benchmark or gameplay integration test was run.
 
@@ -210,6 +228,9 @@ Remaining runtime validation: verify
 datapack reload, plugin scoreboard operations, equipment packet encoding, config
 reload and world-save/restart using a disposable 26.3 copy. Validate plugin and
 datapack compatibility separately before touching the 26.2 production world.
+For the entity/placement ports, check note placement beside powered redstone with
+the opt-in toggle both on and off, separate nearby fish schools, and idle/moving
+ghast and happy ghast rotation, including active look controls.
 
 Next code groups: complete tag/type selector indexes and lifecycle verification;
 command/NBT preparation and caches; function profiler/throttles and timer ownership;

@@ -12,6 +12,9 @@ public final class DatapackOptimizations extends ConfigModule {
     public static volatile boolean scoreboardTeamNullMember = true;
     public static volatile boolean scoreboardTrackedPlayersRace = true;
     public static volatile boolean movingBlocksDestroyPath = true;
+    public static volatile boolean noteBlockPlacePowered = false;
+    public static volatile boolean fishSchoolLeader = true;
+    public static volatile boolean ghastIdleDirection = true;
 
     @Override
     public void onLoaded() {
@@ -33,5 +36,11 @@ public final class DatapackOptimizations extends ConfigModule {
             "Collect tracked score holders without trusting a corrupted collection size counter.");
         movingBlocksDestroyPath = globalConfig.getBoolean("tintedpaper.fixes.moving-blocks-destroy-path", true,
             "Check the block carried by a piston above dirt paths instead of its moving placeholder.");
+        noteBlockPlacePowered = globalConfig.getBoolean("tintedpaper.fixes.note-block-place-powered", false,
+            "Initialize note block power on placement; changes redstone behavior and respects Paper's disabled note block updates.");
+        fishSchoolLeader = globalConfig.getBoolean("tintedpaper.fixes.fish-school-leader", true,
+            "Prevent existing fish school leaders from being recruited into another school.");
+        ghastIdleDirection = globalConfig.getBoolean("tintedpaper.fixes.ghast-idle-direction", true,
+            "Preserve idle ghast heading below 0.1 blocks per tick of horizontal movement, without an attack target.");
     }
 }

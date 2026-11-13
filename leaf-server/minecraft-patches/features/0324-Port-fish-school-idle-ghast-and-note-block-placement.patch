@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 08:42:42 -0300
+Subject: [PATCH] Port fish school idle ghast and note block placement fixes
+
+Preserve the source defaults and native Paper controls. Incoming behavior corresponds to the carpet-fixes note block, FishNoStuck leader and mc-ghast-direction ports; original authors retain their rights.
+
+diff --git a/net/minecraft/world/entity/ai/goal/FollowFlockLeaderGoal.java b/net/minecraft/world/entity/ai/goal/FollowFlockLeaderGoal.java
+index 8553db5f82eb62b0cb2aacc9b7071436aaf96c39..49e99be1ce0be68bb3015d0d4734e658cc9cd044 100644
+--- a/net/minecraft/world/entity/ai/goal/FollowFlockLeaderGoal.java
++++ b/net/minecraft/world/entity/ai/goal/FollowFlockLeaderGoal.java
+@@ -38,7 +38,8 @@ public class FollowFlockLeaderGoal extends Goal {
+             AbstractSchoolingFish leader = DataFixUtils.orElse(
+                 leadersWithSpaceOrNotFollowers.stream().filter(AbstractSchoolingFish::canBeFollowed).findAny(), this.mob
+             );
+-            leader.addFollowers(leadersWithSpaceOrNotFollowers.stream().filter(fish -> !fish.isFollower()));
++            boolean excludeLeaders = org.dreeam.leaf.config.modules.opt.DatapackOptimizations.fishSchoolLeader; // TintedPaper
++            leader.addFollowers(leadersWithSpaceOrNotFollowers.stream().filter(fish -> !fish.isFollower() && (!excludeLeaders || !fish.hasFollowers()))); // TintedPaper - keep existing schools independent
+             return this.mob.isFollower();
+         }
+     }
+diff --git a/net/minecraft/world/entity/monster/Ghast.java b/net/minecraft/world/entity/monster/Ghast.java
+index ecf39a23514b0fb18a4920aeffc81fb4e84a4ed4..6b4bfee976b611e4277267beb7b5fed8d7e6aeca 100644
+--- a/net/minecraft/world/entity/monster/Ghast.java
++++ b/net/minecraft/world/entity/monster/Ghast.java
+@@ -254,6 +254,7 @@ public class Ghast extends Mob implements Enemy {
+     public static void faceMovementDirection(final Mob ghast) {
+         if (ghast.getTarget() == null) {
+             Vec3 movement = ghast.getDeltaMovement();
++            if (org.dreeam.leaf.config.modules.opt.DatapackOptimizations.ghastIdleDirection && movement.horizontalDistanceSqr() < 0.01) return; // TintedPaper - retain heading while horizontally stationary
+             ghast.setYRot(-((float)Mth.atan2(movement.x, movement.z)) * Mth.RAD_TO_DEG);
+             ghast.yBodyRot = ghast.getYRot();
+         } else {
+diff --git a/net/minecraft/world/level/block/NoteBlock.java b/net/minecraft/world/level/block/NoteBlock.java
+index 6d13a88ed0500a62ff8425ed3dae77019ec10201..7c6cb384a1b0d0846a331d741696c369e670dabb 100644
+--- a/net/minecraft/world/level/block/NoteBlock.java
++++ b/net/minecraft/world/level/block/NoteBlock.java
+@@ -58,7 +58,10 @@ public class NoteBlock extends Block {
+     @Override
+     public BlockState getStateForPlacement(final BlockPlaceContext context) {
+         if (io.papermc.paper.configuration.GlobalConfiguration.get().blockUpdates.disableNoteblockUpdates) return this.defaultBlockState(); // Paper - place without considering instrument
+-        return this.setInstrument(context.getLevel(), context.getClickedPos(), this.defaultBlockState());
++        BlockState state = this.setInstrument(context.getLevel(), context.getClickedPos(), this.defaultBlockState());
++        // TintedPaper - initialize power without playing a stray note on the next neighbor update
++        return org.dreeam.leaf.config.modules.opt.DatapackOptimizations.noteBlockPlacePowered && context.getLevel().hasNeighborSignal(context.getClickedPos())
++            ? state.setValue(POWERED, true) : state;
+     }
+ 
+     @Override
