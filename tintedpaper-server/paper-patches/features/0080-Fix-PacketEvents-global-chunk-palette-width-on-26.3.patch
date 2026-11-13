@@ -1,0 +1,273 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 13:59:04 -0300
+Subject: [PATCH] Fix PacketEvents global chunk palette width on 26.3
+
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/util/Commodore.java b/src/main/java/org/bukkit/craftbukkit/util/Commodore.java
+index 172fdec7c41c2dcd028979c7387371fbc754d0d3..1f21f0eac8544094591511484347dbc39a184e75 100644
+--- a/src/main/java/org/bukkit/craftbukkit/util/Commodore.java
++++ b/src/main/java/org/bukkit/craftbukkit/util/Commodore.java
+@@ -281,6 +281,9 @@ public class Commodore {
+ 
+             @Override
+             public MethodVisitor visitMethod(int access, String name, String desc, String signature, String[] exceptions) {
++                // TintedPaper - old PacketEvents global palettes truncate 26.3 block state IDs to 15 bits.
++                final boolean fixChunkPalette = this.className.equals("com/github/retrooper/packetevents/protocol/world/chunk/palette/DataPalette")
++                    && name.equals("resizeOneUp") && desc.equals("()V");
+                 return new MethodVisitor(this.api, super.visitMethod(access, name, desc, signature, exceptions)) {
+                     // Paper start - Plugin rewrites
+                     @Override
+@@ -544,6 +547,21 @@ public class Commodore {
+                         this.handleMethod((newOpcode, newOwner, newName, newDescription, newItf, newSam, newInstantiated) -> {
+                             super.visitMethodInsn(newOpcode, newOwner, newName, newDescription, newItf);
+                         }, opcode, owner, name, desc, itf, null, null);
++                        // TintedPaper start - retain local/biome palettes and derive global block bits from the registry.
++                        if (fixChunkPalette && opcode == Opcodes.INVOKEINTERFACE && name.equals("getBits") && desc.equals("()I")
++                            && owner.equals("com/github/retrooper/packetevents/protocol/world/chunk/palette/Palette")) {
++                            super.visitVarInsn(Opcodes.ALOAD, 0);
++                            super.visitFieldInsn(Opcodes.GETFIELD, "com/github/retrooper/packetevents/protocol/world/chunk/palette/DataPalette", "paletteType",
++                                "Lcom/github/retrooper/packetevents/protocol/world/chunk/palette/PaletteType;");
++                            super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/lang/Enum", "name", "()Ljava/lang/String;", false);
++                            super.visitMethodInsn(Opcodes.INVOKESTATIC, "org/bukkit/craftbukkit/util/Commodore", "tinted$chunkPaletteBits", "(ILjava/lang/String;)I", false);
++                        }
++                        // TintedPaper end
++                    }
++
++                    @Override
++                    public void visitMaxs(int maxStack, int maxLocals) {
++                        super.visitMaxs(fixChunkPalette ? maxStack + 1 : maxStack, maxLocals);
+                     }
+ 
+                     @Override
+@@ -664,6 +682,11 @@ public class Commodore {
+         return cw.toByteArray();
+     }
+ 
++    public static int tinted$chunkPaletteBits(int bits, String paletteType) {
++        return bits > 8 && "CHUNK".equals(paletteType)
++            ? net.minecraft.util.Mth.ceillog2(net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY.size()) : bits;
++    }
++
+     private static AnnotationVisitor createAnnotationVisitor(ApiVersion apiVersion, int api, AnnotationVisitor delegate) {
+         return new AnnotationVisitor(api, delegate) {
+             @Override
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/ChunkPaletteProtocolTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/ChunkPaletteProtocolTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..c725af7fbc246e8e12eaf85226406266e3b10e34
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/ChunkPaletteProtocolTest.java
+@@ -0,0 +1,79 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.netty.buffer.Unpooled;
++import java.util.ArrayList;
++import java.util.List;
++import net.minecraft.core.Holder;
++import net.minecraft.core.IdMapper;
++import net.minecraft.network.FriendlyByteBuf;
++import net.minecraft.util.SimpleBitStorage;
++import net.minecraft.world.level.biome.Biome;
++import net.minecraft.world.level.block.Block;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.state.BlockState;
++import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.level.chunk.MissingPaletteEntryException;
++import net.minecraft.world.level.chunk.PalettedContainer;
++import net.minecraft.world.level.chunk.Strategy;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.mock;
++
++@Normal
++class ChunkPaletteProtocolTest {
++    @Test
++    void nativeSectionsRoundTripAcrossLocalAndGlobalPalettesWithCustomBiomes() {
++        int blockStateCount = Block.BLOCK_STATE_REGISTRY.size();
++        IdMapper<Holder<Biome>> biomeIds = new IdMapper<>();
++        List<Holder<Biome>> biomes = new ArrayList<>();
++        for (int i = 0; i < 73; i++) {
++            Holder<Biome> biome = Holder.direct(mock(Biome.class));
++            biomes.add(biome);
++            biomeIds.add(biome);
++        }
++        for (int distinctStates : new int[]{1, 16, 32, 256, 257, 512}) {
++            var states = new PalettedContainer<>(Blocks.AIR.defaultBlockState(), Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY), null);
++            var biomeContainer = new PalettedContainer<>(biomes.getFirst(), Strategy.createForBiomes(biomeIds), null);
++            BlockState[] expected = new BlockState[4096];
++            for (int i = 0; i < expected.length; i++) {
++                expected[i] = Block.BLOCK_STATE_REGISTRY.byId(((i % distinctStates) * 83 + 31) % blockStateCount);
++                states.set(i, expected[i]);
++            }
++            for (int i = 0; i < 64; i++) biomeContainer.set(i, biomes.get(i));
++            var source = new LevelChunkSection(states, biomeContainer);
++            var decoded = new LevelChunkSection(states.recreate(), biomeContainer.recreate());
++            FriendlyByteBuf bytes = new FriendlyByteBuf(Unpooled.buffer());
++            try {
++                source.write(bytes, null, 0);
++                assertEquals(source.getSerializedSize(), bytes.readableBytes());
++                decoded.read(bytes);
++                assertFalse(bytes.isReadable());
++                for (int i = 0; i < expected.length; i++) assertSame(expected[i], decoded.getStates().get(i), "Block " + i + ", palette " + distinctStates);
++                for (int i = 0; i < 64; i++) assertSame(biomes.get(i), decoded.getBiomes().get(i & 3, i >> 4, (i >> 2) & 3));
++            } finally {
++                bytes.release();
++            }
++        }
++    }
++
++    @Test
++    void fifteenBitGlobalStorageReproducesTheReportedInvalid37889Index() {
++        assertTrue(Block.BLOCK_STATE_REGISTRY.size() > 32768);
++        SimpleBitStorage legacy = new SimpleBitStorage(15, 4096);
++        legacy.set(0, 5121);
++        legacy.set(1, 1);
++        FriendlyByteBuf bytes = new FriendlyByteBuf(Unpooled.buffer());
++        try {
++            bytes.writeByte(15);
++            bytes.writeFixedSizeLongArray(legacy.getRaw());
++            var decoded = new PalettedContainer<>(Blocks.AIR.defaultBlockState(), Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY), null);
++            decoded.read(bytes);
++            MissingPaletteEntryException failure = assertThrows(MissingPaletteEntryException.class, () -> decoded.get(0));
++            assertTrue(failure.getMessage().contains("37889"));
++        } finally {
++            bytes.release();
++        }
++    }
++}
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/PacketEventsPaletteCompatibilityTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/PacketEventsPaletteCompatibilityTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..93b2f3d41e305ceefbe142d6cbc0f98eba387a06
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/PacketEventsPaletteCompatibilityTest.java
+@@ -0,0 +1,128 @@
++package org.bukkit.craftbukkit.tinted;
++
++import com.google.common.base.Predicates;
++import java.io.IOException;
++import java.lang.reflect.Proxy;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.Set;
++import net.minecraft.util.Mth;
++import net.minecraft.util.SimpleBitStorage;
++import net.minecraft.world.level.block.Block;
++import org.bukkit.craftbukkit.util.ApiVersion;
++import org.bukkit.craftbukkit.util.Commodore;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++import org.objectweb.asm.ClassReader;
++import org.objectweb.asm.ClassWriter;
++import org.objectweb.asm.Type;
++import org.objectweb.asm.commons.ClassRemapper;
++import org.objectweb.asm.commons.SimpleRemapper;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++@Normal
++class PacketEventsPaletteCompatibilityTest {
++    private static final String PACKAGE = "com/github/retrooper/packetevents/protocol/world/chunk/palette/";
++
++    @Test
++    void rewrittenChunkResizeRetainsIdsAbove32767() throws Exception {
++        Object palette = fixture("DataPalette", "CHUNK", 15);
++        SimpleBitStorage storage = (SimpleBitStorage) palette.getClass().getMethod("resize").invoke(palette);
++        assertEquals(Mth.ceillog2(Block.BLOCK_STATE_REGISTRY.size()), storage.getBits());
++        int lastState = Block.BLOCK_STATE_REGISTRY.size() - 1;
++        storage.set(4095, lastState);
++        assertEquals(lastState, storage.get(4095));
++        assertEquals(15, palette.getClass().getMethod("unrelatedBits").invoke(palette));
++    }
++
++    @Test
++    void localPalettesAndBiomePalettesKeepTheirOriginalWidths() throws Exception {
++        for (Object palette : new Object[]{fixture("DataPalette", "CHUNK", 8), fixture("DataPalette", "BIOME", 15)}) {
++            SimpleBitStorage storage = (SimpleBitStorage) palette.getClass().getMethod("resize").invoke(palette);
++            assertEquals(palette.getClass().getMethod("unrelatedBits").invoke(palette), storage.getBits());
++        }
++    }
++
++    @Test
++    void correctedLibraryWidthsContinueToWork() throws Exception {
++        int bits = Mth.ceillog2(Block.BLOCK_STATE_REGISTRY.size());
++        Object palette = fixture("DataPalette", "CHUNK", bits);
++        assertEquals(bits, ((SimpleBitStorage) palette.getClass().getMethod("resize").invoke(palette)).getBits());
++    }
++
++    @Test
++    void unrelatedClassesAreNotRewritten() throws Exception {
++        Object palette = fixture("OtherDataPalette", "CHUNK", 15);
++        assertEquals(15, ((SimpleBitStorage) palette.getClass().getMethod("resize").invoke(palette)).getBits());
++    }
++
++    private static Object fixture(String className, String paletteType, int bits) throws Exception {
++        Map<String, String> names = Map.of(
++            Type.getInternalName(DataPaletteFixture.class), PACKAGE + className,
++            Type.getInternalName(PaletteFixture.class), PACKAGE + "Palette",
++            Type.getInternalName(PaletteTypeFixture.class), PACKAGE + "PaletteType"
++        );
++        Map<String, byte[]> classes = new HashMap<>();
++        Commodore commodore = new Commodore(Predicates.alwaysTrue());
++        for (Class<?> type : new Class<?>[]{DataPaletteFixture.class, PaletteFixture.class, PaletteTypeFixture.class}) {
++            byte[] original;
++            try (var input = type.getResourceAsStream("/" + Type.getInternalName(type) + ".class")) {
++                if (input == null) throw new IOException("Missing fixture class " + type);
++                original = input.readAllBytes();
++            }
++            ClassWriter remapped = new ClassWriter(0);
++            new ClassReader(original).accept(new ClassRemapper(remapped, new SimpleRemapper(names)), 0);
++            byte[] converted = commodore.convert(remapped.toByteArray(), "PacketEvents", ApiVersion.getOrCreateVersion("26.3"), Set.of());
++            classes.put(names.get(Type.getInternalName(type)).replace('/', '.'), converted);
++        }
++        ClassLoader loader = new ClassLoader(PacketEventsPaletteCompatibilityTest.class.getClassLoader()) {
++            @Override
++            protected Class<?> findClass(String name) throws ClassNotFoundException {
++                byte[] bytes = classes.get(name);
++                if (bytes == null) throw new ClassNotFoundException(name);
++                return this.defineClass(name, bytes, 0, bytes.length);
++            }
++        };
++        Class<?> typeClass = loader.loadClass((PACKAGE + "PaletteType").replace('/', '.'));
++        Object selected = null;
++        for (Object constant : typeClass.getEnumConstants()) {
++            if (((Enum<?>) constant).name().equals(paletteType)) selected = constant;
++        }
++        Class<?> paletteClass = loader.loadClass((PACKAGE + "Palette").replace('/', '.'));
++        Object palette = Proxy.newProxyInstance(loader, new Class<?>[]{paletteClass}, (proxy, method, args) -> bits);
++        return loader.loadClass((PACKAGE + className).replace('/', '.')).getConstructor(typeClass, paletteClass).newInstance(selected, palette);
++    }
++
++    public interface PaletteFixture {
++        int getBits();
++    }
++
++    public enum PaletteTypeFixture {
++        CHUNK, BIOME
++    }
++
++    public static class DataPaletteFixture {
++        private final PaletteTypeFixture paletteType;
++        private final PaletteFixture palette;
++        private SimpleBitStorage storage;
++
++        public DataPaletteFixture(PaletteTypeFixture paletteType, PaletteFixture palette) {
++            this.paletteType = paletteType;
++            this.palette = palette;
++        }
++
++        private void resizeOneUp() {
++            this.storage = new SimpleBitStorage(this.palette.getBits(), 4096);
++        }
++
++        public SimpleBitStorage resize() {
++            this.resizeOneUp();
++            return this.storage;
++        }
++
++        public int unrelatedBits() {
++            return this.palette.getBits();
++        }
++    }
++}
