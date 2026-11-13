@@ -1,0 +1,24 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 07:38:33 -0300
+Subject: [PATCH] Port DPO moving piston dirt path survival fix
+
+
+diff --git a/net/minecraft/world/level/block/PathBlock.java b/net/minecraft/world/level/block/PathBlock.java
+index bc1c6e01720c091873ee2fd9add04fccd30bb12f..3fd661560304396ae085fecca0d867646a3826fd 100644
+--- a/net/minecraft/world/level/block/PathBlock.java
++++ b/net/minecraft/world/level/block/PathBlock.java
+@@ -76,6 +76,13 @@ public class PathBlock extends Block {
+     @Override
+     protected boolean canSurvive(final BlockState state, final LevelReader level, final BlockPos pos) {
+         BlockState aboveState = level.getBlockState(pos.above());
++        // TintedPaper start - DPO MC-161026: judge the carried block, not the moving placeholder
++        if (org.dreeam.leaf.config.modules.opt.DatapackOptimizations.movingBlocksDestroyPath
++            && state.is(Blocks.DIRT_PATH) && aboveState.is(Blocks.MOVING_PISTON)
++            && level.getBlockEntity(pos.above()) instanceof net.minecraft.world.level.block.piston.PistonMovingBlockEntity moving) {
++            aboveState = moving.getMovedState();
++        }
++        // TintedPaper end
+         return !aboveState.isSolid() || aboveState.getBlock() instanceof FenceGateBlock;
+     }
+ 

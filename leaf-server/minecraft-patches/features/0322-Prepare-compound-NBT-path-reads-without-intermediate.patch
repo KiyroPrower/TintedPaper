@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 07:59:12 -0300
+Subject: [PATCH] Prepare compound NBT path reads without intermediate lists
+
+
+diff --git a/net/minecraft/commands/arguments/NbtPathArgument.java b/net/minecraft/commands/arguments/NbtPathArgument.java
+index 7dbbd357a8e2b703fbfd77f3f854b6abe1fb9332..e4c427b06f47a92ed6107c91a242464a8f6a8f53 100644
+--- a/net/minecraft/commands/arguments/NbtPathArgument.java
++++ b/net/minecraft/commands/arguments/NbtPathArgument.java
+@@ -616,6 +616,7 @@ public class NbtPathArgument implements ArgumentType<NbtPathArgument.NbtPath> {
+         private final String original;
+         private final Object2IntMap<NbtPathArgument.Node> nodeToOriginalPosition;
+         private final NbtPathArgument.Node[] nodes;
++        private final boolean tinted$namedReadPlan; // TintedPaper - DPO preparation for single-result compound paths
+         public static final Codec<NbtPathArgument.NbtPath> CODEC = Codec.STRING.comapFlatMap(string -> {
+             try {
+                 NbtPathArgument.NbtPath parsed = new NbtPathArgument().parse(new StringReader(string));
+@@ -633,9 +634,41 @@ public class NbtPathArgument implements ArgumentType<NbtPathArgument.NbtPath> {
+             this.original = original;
+             this.nodes = nodes;
+             this.nodeToOriginalPosition = nodeToOriginalPosition;
++            boolean named = nodes.length >= 2 && nodes.length <= 32;
++            for (Node node : nodes) {
++                if (node == null || node.getClass() != CompoundChildNode.class) {
++                    named = false;
++                    break;
++                }
++            }
++            this.tinted$namedReadPlan = named;
+         }
+ 
+         public List<Tag> get(final Tag tag) throws CommandSyntaxException {
++            // TintedPaper start - DPO reuse one result list for prepared compound-only paths
++            if (this.tinted$namedReadPlan && org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtNamedReadPlan) {
++                List<Tag> result = new java.util.ArrayList<>(1);
++                Tag current = tag;
++                for (int i = 0; i < this.nodes.length; ++i) {
++                    Node node = this.nodes[i];
++                    if (node.getClass() != CompoundChildNode.class) {
++                        List<Tag> remaining = i == 0 ? Collections.singletonList(tag) : result;
++                        for (int j = i; j < this.nodes.length; ++j) {
++                            remaining = this.nodes[j].get(remaining);
++                            if (remaining.isEmpty()) throw this.createNotFoundException(this.nodes[j]);
++                        }
++                        return remaining;
++                    }
++                    result.clear();
++                    node.getTag(current, result);
++                    if (result.isEmpty()) {
++                        throw this.createNotFoundException(node);
++                    }
++                    current = result.getFirst();
++                }
++                return result;
++            }
++            // TintedPaper end
+             List<Tag> result = Collections.singletonList(tag);
+ 
+             for (NbtPathArgument.Node node : this.nodes) {

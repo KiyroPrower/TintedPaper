@@ -1,0 +1,71 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 07:59:14 -0300
+Subject: [PATCH] Verify prepared NBT reads preserve live values errors and
+ branching fallbacks
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java
+index b79b9dbd08df31b3d709890b98d62aa1ba5b892b..073a3a1c36e88fbbabbef243a78559d9a1dbb6ce 100644
+--- a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java
+@@ -36,6 +36,59 @@ import static org.mockito.Mockito.*;
+ 
+ @Normal
+ class DatapackPortsTest {
++    @Test
++    void preparedReadsFallBackIfANodeBecomesBranching() throws Exception {
++        NbtPathArgument.NbtPath path = NbtPathArgument.NbtPath.of("tinted_mutation_test.entries");
++        java.lang.reflect.Field nodesField = NbtPathArgument.NbtPath.class.getDeclaredField("nodes");
++        nodesField.setAccessible(true);
++        Object[] nodes = (Object[]) nodesField.get(path);
++        java.lang.reflect.Field allField = Class.forName(NbtPathArgument.class.getName() + "$AllElementsNode").getDeclaredField("INSTANCE");
++        allField.setAccessible(true);
++        Object original = nodes[1];
++        try {
++            nodes[1] = allField.get(null);
++            CompoundTag data = TagParser.parseCompoundFully("{tinted_mutation_test:[1,2]}");
++            assertEquals(List.of(net.minecraft.nbt.IntTag.valueOf(1), net.minecraft.nbt.IntTag.valueOf(2)), path.get(data));
++        } finally {
++            nodes[1] = original;
++        }
++    }
++
++    @Test
++    void preparedNamedReadsObserveMutationsAndPreserveErrors() throws Exception {
++        NbtPathArgument.NbtPath path = NbtPathArgument.NbtPath.of("root.'key.with.dot'.value");
++        CompoundTag data = TagParser.parseCompoundFully("{root:{'key.with.dot':{value:1}}}");
++        boolean previous = org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtNamedReadPlan;
++        try {
++            org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtNamedReadPlan = false;
++            List<net.minecraft.nbt.Tag> nativeResult = path.get(data);
++            org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtNamedReadPlan = true;
++            List<net.minecraft.nbt.Tag> preparedResult = path.get(data);
++            assertEquals(nativeResult, preparedResult);
++            preparedResult.clear();
++            assertEquals(nativeResult, path.get(data));
++            CompoundTag child = (CompoundTag) ((CompoundTag) data.get("root")).get("key.with.dot");
++            child.putInt("value", 2);
++            assertEquals(List.of(net.minecraft.nbt.IntTag.valueOf(2)), path.get(data));
++            child.remove("value");
++            CommandSyntaxException preparedError = assertThrows(CommandSyntaxException.class, () -> path.get(data));
++            org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtNamedReadPlan = false;
++            CommandSyntaxException nativeError = assertThrows(CommandSyntaxException.class, () -> path.get(data));
++            assertEquals(nativeError.getMessage(), preparedError.getMessage());
++        } finally {
++            org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtNamedReadPlan = previous;
++        }
++    }
++
++    @Test
++    void branchingAndIndexedPathsKeepNativeTraversal() throws Exception {
++        CompoundTag data = TagParser.parseCompoundFully("{entries:[{value:1},{value:2}]}");
++        assertEquals(List.of(net.minecraft.nbt.IntTag.valueOf(1), net.minecraft.nbt.IntTag.valueOf(2)),
++            NbtPathArgument.NbtPath.of("entries[].value").get(data));
++        assertEquals(List.of(net.minecraft.nbt.IntTag.valueOf(2)),
++            NbtPathArgument.NbtPath.of("entries[-1].value").get(data));
++    }
++
+     @Test
+     void cubeCoordinatesRemainImmutableAndWorkWithMoonriseInitialization() {
+         var shape = new net.minecraft.world.phys.shapes.CubeVoxelShape(new net.minecraft.world.phys.shapes.BitSetDiscreteVoxelShape(2, 4, 8));

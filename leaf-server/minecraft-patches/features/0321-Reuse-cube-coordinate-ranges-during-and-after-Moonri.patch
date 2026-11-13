@@ -1,0 +1,39 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 07:47:02 -0300
+Subject: [PATCH] Reuse cube coordinate ranges during and after Moonrise
+ initialization
+
+
+diff --git a/net/minecraft/world/phys/shapes/CubeVoxelShape.java b/net/minecraft/world/phys/shapes/CubeVoxelShape.java
+index da356bdbd621c93310d79399c212c12b1e2c2fbc..5d332539a2e76b261d9b5c10669cccc5d71d5657 100644
+--- a/net/minecraft/world/phys/shapes/CubeVoxelShape.java
++++ b/net/minecraft/world/phys/shapes/CubeVoxelShape.java
+@@ -5,14 +5,26 @@ import net.minecraft.core.Direction;
+ import net.minecraft.util.Mth;
+ 
+ public final class CubeVoxelShape extends VoxelShape {
++    private final DoubleList tinted$xCoords;
++    private final DoubleList tinted$yCoords;
++    private final DoubleList tinted$zCoords;
++
+     public CubeVoxelShape(final DiscreteVoxelShape shape) {
+         super(shape);
++        // TintedPaper - initialize before Moonrise asks for these immutable coordinate ranges
++        this.tinted$xCoords = new CubePointRange(shape.getSize(Direction.Axis.X));
++        this.tinted$yCoords = new CubePointRange(shape.getSize(Direction.Axis.Y));
++        this.tinted$zCoords = new CubePointRange(shape.getSize(Direction.Axis.Z));
+         ((ca.spottedleaf.moonrise.patches.collisions.shape.CollisionVoxelShape)this).moonrise$initCache(); // Paper - optimise collisions
+     }
+ 
+     @Override
+     public DoubleList getCoords(final Direction.Axis axis) {
+-        return new CubePointRange(this.shape.getSize(axis));
++        return switch (axis) {
++            case X -> this.tinted$xCoords;
++            case Y -> this.tinted$yCoords;
++            case Z -> this.tinted$zCoords;
++        };
+     }
+ 
+     @Override

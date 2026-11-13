@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sodium <sodium@kiyro.dev>
+Date: Thu, 12 Nov 2026 15:40:30 -0300
+Subject: [PATCH] Tolerate datapack references to missing recipes
+
+
+diff --git a/net/minecraft/core/MappedRegistry.java b/net/minecraft/core/MappedRegistry.java
+index 6405c8c92795232fd2ac3a4d7e2fb5e460c18d02..83dca82c15e780e9c168a8ee1401f1431bc128a8 100644
+--- a/net/minecraft/core/MappedRegistry.java
++++ b/net/minecraft/core/MappedRegistry.java
+@@ -310,6 +310,14 @@ public class MappedRegistry<T> implements WritableRegistry<T> {
+             .map(e -> e.getKey().identifier())
+             .sorted()
+             .toList();
++        // TintedPaper start - a datapack advancement naming a recipe another pack removed was ignored before recipes became
++        // a registry; keep it non-fatal. Recipe holders are only compared by key (RecipeCraftedTrigger), never read.
++        if (!unboundEntries.isEmpty() && this.key().equals(net.minecraft.core.registries.Registries.RECIPE)) {
++            this.byKey.values().removeIf(holder -> !holder.isBound());
++            com.mojang.logging.LogUtils.getLogger().warn("Ignoring references to missing recipes (a datapack removed or never defined them): {}", unboundEntries);
++            unboundEntries = List.of();
++        }
++        // TintedPaper end
+         if (!unboundEntries.isEmpty()) {
+             throw new IllegalStateException("Unbound values in registry " + this.key() + ": " + unboundEntries);
+         }

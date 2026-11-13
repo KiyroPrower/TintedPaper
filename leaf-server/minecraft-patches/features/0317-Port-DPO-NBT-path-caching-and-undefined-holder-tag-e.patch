@@ -1,0 +1,140 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 03:36:57 -0300
+Subject: [PATCH] Port DPO NBT path caching and undefined holder tag encoding
+
+
+diff --git a/net/minecraft/commands/arguments/NbtPathArgument.java b/net/minecraft/commands/arguments/NbtPathArgument.java
+index 53b5f5348413dcac86702187b533ebd6192312ea..31927a440836014db1224aa3ade661ab105adb5d 100644
+--- a/net/minecraft/commands/arguments/NbtPathArgument.java
++++ b/net/minecraft/commands/arguments/NbtPathArgument.java
+@@ -61,6 +61,59 @@ public class NbtPathArgument implements ArgumentType<NbtPathArgument.NbtPath> {
+ 
+     @Override
+     public NbtPathArgument.NbtPath parse(final StringReader reader) throws CommandSyntaxException {
++        // TintedPaper start - DPO bounded compiled path cache
++        int max = org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtPathCacheSize;
++        if (max == 0) return this.tinted$parseUncached(reader);
++        int start = reader.getCursor();
++        int end = tinted$findPathEnd(reader.getString(), start);
++        if (end <= start) return this.tinted$parseUncached(reader);
++        String key = reader.getString().substring(start, end);
++        synchronized (TINTED_PATHS) {
++            NbtPath cached = TINTED_PATHS.getAndMoveToLast(key);
++            if (cached != null) {
++                reader.setCursor(end);
++                return cached;
++            }
++        }
++        NbtPath result = this.tinted$parseUncached(reader);
++        // Never cache an exception or a slice whose cursor disagrees with the native grammar.
++        if (reader.getCursor() == end) {
++            synchronized (TINTED_PATHS) {
++                while (TINTED_PATHS.size() >= max) TINTED_PATHS.removeFirst();
++                TINTED_PATHS.putAndMoveToLast(key, result);
++            }
++        }
++        return result;
++    }
++
++    private static final it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap<String, NbtPath> TINTED_PATHS =
++        new it.unimi.dsi.fastutil.objects.Object2ObjectLinkedOpenHashMap<>();
++
++    private static int tinted$findPathEnd(final String source, final int start) {
++        char quote = 0;
++        boolean escaped = false;
++        int depth = 0;
++        for (int i = start; i < source.length(); ++i) {
++            char c = source.charAt(i);
++            if (quote != 0) {
++                if (escaped) escaped = false;
++                else if (c == '\\') escaped = true;
++                else if (c == quote) quote = 0;
++            } else if (c == '"' || c == '\'') {
++                quote = c;
++            } else if (c == '[' || c == '{') {
++                ++depth;
++            } else if (c == ']' || c == '}') {
++                if (depth > 0) --depth;
++            } else if (c == ' ' && depth == 0) {
++                return i;
++            }
++        }
++        return source.length();
++    }
++
++    private NbtPathArgument.NbtPath tinted$parseUncached(final StringReader reader) throws CommandSyntaxException {
++        // TintedPaper end - DPO bounded compiled path cache
+         List<NbtPathArgument.Node> nodes = Lists.newArrayList();
+         int start = reader.getCursor();
+         Object2IntMap<NbtPathArgument.Node> nodeToOriginalPosition = new Object2IntOpenHashMap<>();
+@@ -359,12 +412,40 @@ public class NbtPathArgument implements ArgumentType<NbtPathArgument.NbtPath> {
+         @Override
+         public void getTag(final Tag parent, final List<Tag> output) {
+             if (parent instanceof ListTag list) {
++                // TintedPaper start - DPO filtered NBT list loops
++                if (org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtListMatchLoops && parent.getClass() == ListTag.class) {
++                    java.util.Spliterator<Tag> elements = list.spliterator();
++                    elements.getExactSizeIfKnown();
++                    elements.forEachRemaining(element -> { if (this.predicate.test(element)) output.add(element); });
++                    return;
++                }
++                // TintedPaper end - DPO filtered NBT list loops
+                 list.stream().filter(this.predicate).forEach(output::add);
+             }
+         }
+ 
+         @Override
+         public void getOrCreateTag(final Tag parent, final Supplier<Tag> child, final List<Tag> output) {
++            // TintedPaper start - DPO filtered NBT list write preparation
++            if (org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtListMatchLoops && parent instanceof ListTag list && parent.getClass() == ListTag.class) {
++                java.util.Iterator<Tag> elements = list.iterator();
++                list.size();
++                boolean found = false;
++                while (elements.hasNext()) {
++                    Tag element = elements.next();
++                    if (this.predicate.test(element)) {
++                        output.add(element);
++                        found = true;
++                    }
++                }
++                if (!found) {
++                    CompoundTag created = this.pattern.copy();
++                    list.add(created);
++                    output.add(created);
++                }
++                return;
++            }
++            // TintedPaper end - DPO filtered NBT list write preparation
+             MutableBoolean foundAnything = new MutableBoolean();
+             if (parent instanceof ListTag list) {
+                 list.stream().filter(this.predicate).forEach(t -> {
+diff --git a/net/minecraft/network/codec/ByteBufCodecs.java b/net/minecraft/network/codec/ByteBufCodecs.java
+index 07d06eaea3ab06b021f292800e6e18dbe07e99d4..6ade2b823b9e3dc4fd48efe3c32a23016e76cdfe 100644
+--- a/net/minecraft/network/codec/ByteBufCodecs.java
++++ b/net/minecraft/network/codec/ByteBufCodecs.java
+@@ -838,6 +838,24 @@ public interface ByteBufCodecs {
+             @Override
+             public void encode(final RegistryFriendlyByteBuf output, final HolderSet<T> value) {
+                 Optional<TagKey<T>> key = value.unwrapKey();
++                // TintedPaper start - DPO undefined holder tags must not disconnect clients
++                if (org.dreeam.leaf.config.modules.opt.DatapackOptimizations.unknownTagHolderSets && key.isPresent()) {
++                    Optional<? extends Registry<T>> registry = output.registryAccess().lookup(registryKey);
++                    if (registry.isPresent() && registry.get().get(key.get()).isEmpty()) {
++                        List<Holder<T>> entries = new ArrayList<>();
++                        try {
++                            for (Holder<T> holder : value) {
++                                if (holder.unwrapKey().isPresent()) entries.add(holder);
++                            }
++                        } catch (RuntimeException unbound) {
++                            entries.clear();
++                        }
++                        VarInt.write(output, entries.size() + 1);
++                        for (Holder<T> holder : entries) this.holderCodec.encode(output, holder);
++                        return;
++                    }
++                }
++                // TintedPaper end - DPO undefined holder tags
+                 if (key.isPresent()) {
+                     VarInt.write(output, 0);
+                     Identifier.STREAM_CODEC.encode(output, key.get().location());

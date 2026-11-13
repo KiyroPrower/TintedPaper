@@ -1,0 +1,121 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 03:37:00 -0300
+Subject: [PATCH] Cover native DPO scoreboard NBT and holder-set ports
+
+
+diff --git a/src/test/java/dev/kiyro/tinted/DatapackPortsTest.java b/src/test/java/dev/kiyro/tinted/DatapackPortsTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..24f71446111ed251828020ec53d015c876135ec7
+--- /dev/null
++++ b/src/test/java/dev/kiyro/tinted/DatapackPortsTest.java
+@@ -0,0 +1,109 @@
++package dev.kiyro.tinted;
++
++import com.mojang.brigadier.StringReader;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import io.netty.buffer.Unpooled;
++import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.Optional;
++import net.minecraft.commands.arguments.NbtPathArgument;
++import net.minecraft.core.HolderSet;
++import net.minecraft.core.Registry;
++import net.minecraft.core.RegistryAccess;
++import net.minecraft.core.registries.Registries;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.ListTag;
++import net.minecraft.nbt.TagParser;
++import net.minecraft.network.RegistryFriendlyByteBuf;
++import net.minecraft.network.VarInt;
++import net.minecraft.network.codec.ByteBufCodecs;
++import net.minecraft.resources.Identifier;
++import net.minecraft.tags.TagKey;
++import net.minecraft.world.item.Item;
++import net.minecraft.world.scores.PlayerTeam;
++import net.minecraft.world.scores.ScoreHolder;
++import net.minecraft.world.scores.Scoreboard;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DatapackPortsTest {
++    @Test
++    void nullTeamMemberDoesNotPreventSavingValidMembers() {
++        PlayerTeam team = new PlayerTeam(new Scoreboard(), "test");
++        team.getPlayers().add("player");
++        team.getPlayers().add(null);
++        assertEquals(List.of("player"), team.pack().players());
++        assertTrue(team.getPlayers().contains(null));
++    }
++
++    @Test
++    @SuppressWarnings("unchecked")
++    void trackedHoldersDoNotTrustACorruptFastutilSizeCounter() throws Exception {
++        Scoreboard scoreboard = new Scoreboard();
++        java.lang.reflect.Field field = Scoreboard.class.getDeclaredField("playerScores");
++        field.setAccessible(true);
++        Map<String, Object> scores = (Map<String, Object>) field.get(scoreboard);
++        scores.put("alpha", null);
++        scores.put("beta", null);
++        java.lang.reflect.Field size = Object2ObjectOpenHashMap.class.getDeclaredField("size");
++        size.setAccessible(true);
++        size.setInt(scores, 3);
++        assertEquals(java.util.Set.of("alpha", "beta"), scoreboard.getTrackedPlayers().stream()
++            .map(ScoreHolder::getScoreboardName).collect(java.util.stream.Collectors.toSet()));
++        assertThrows(UnsupportedOperationException.class, () -> scoreboard.getTrackedPlayers().clear());
++    }
++
++    @Test
++    void cachedPathsKeepCursorBoundariesAndNeverCacheMalformedInput() throws Exception {
++        NbtPathArgument parser = new NbtPathArgument();
++        String path = "Inventory[{Slot:0b, name:'a b'}].value";
++        StringReader first = new StringReader(path + " rest");
++        NbtPathArgument.NbtPath compiled = parser.parse(first);
++        StringReader second = new StringReader("prefix " + path + " tail");
++        second.setCursor(7);
++        assertSame(compiled, parser.parse(second));
++        assertEquals(7 + path.length(), second.getCursor());
++        assertEquals(" tail", second.getRemaining());
++        assertThrows(CommandSyntaxException.class, () -> parser.parse(new StringReader("Inventory[[")));
++        parser.parse(new StringReader("Health"));
++        assertThrows(CommandSyntaxException.class, () -> parser.parse(new StringReader("Inventory[[")));
++    }
++
++    @Test
++    void filteredPathsCreateIndependentPatternsAndReadExistingMatches() throws Exception {
++        NbtPathArgument.NbtPath path = NbtPathArgument.NbtPath.of("entries[{id:1}]");
++        CompoundTag first = TagParser.parseCompoundFully("{entries:[]}");
++        CompoundTag second = TagParser.parseCompoundFully("{entries:[]}");
++        List<net.minecraft.nbt.Tag> created = path.getOrCreate(first, CompoundTag::new);
++        List<net.minecraft.nbt.Tag> other = path.getOrCreate(second, CompoundTag::new);
++        assertEquals(1, created.size());
++        assertNotSame(created.getFirst(), other.getFirst());
++        assertEquals(created, path.get(first));
++        assertEquals(1, ((ListTag) first.get("entries")).size());
++    }
++
++    @Test
++    @SuppressWarnings("unchecked")
++    void undefinedUnboundHolderTagIsEncodedAsAnEmptyDirectSet() {
++        Registry<Item> registry = mock(Registry.class);
++        TagKey<Item> tag = TagKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath("tinted", "missing"));
++        when(registry.get(tag)).thenReturn(Optional.empty());
++        HolderSet<Item> set = mock(HolderSet.class);
++        when(set.unwrapKey()).thenReturn(Optional.of(tag));
++        when(set.iterator()).thenThrow(new IllegalStateException("Unbound named set"));
++        RegistryAccess access = new RegistryAccess.ImmutableRegistryAccess(Map.of(Registries.ITEM, registry));
++        RegistryFriendlyByteBuf buffer = new RegistryFriendlyByteBuf(Unpooled.buffer(), access);
++        try {
++            ByteBufCodecs.holderSet(Registries.ITEM).encode(buffer, set);
++            assertEquals(1, VarInt.read(buffer));
++            assertFalse(buffer.isReadable());
++        } finally {
++            buffer.release();
++        }
++    }
++}

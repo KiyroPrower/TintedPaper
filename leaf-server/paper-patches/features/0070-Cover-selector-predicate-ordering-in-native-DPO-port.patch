@@ -1,0 +1,53 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 03:41:45 -0300
+Subject: [PATCH] Cover selector predicate ordering in native DPO port
+
+
+diff --git a/src/test/java/dev/kiyro/tinted/DatapackPortsTest.java b/src/test/java/dev/kiyro/tinted/DatapackPortsTest.java
+index 24f71446111ed251828020ec53d015c876135ec7..3686869924a53953f832e1ed38e2fc2b2f29a1d8 100644
+--- a/src/test/java/dev/kiyro/tinted/DatapackPortsTest.java
++++ b/src/test/java/dev/kiyro/tinted/DatapackPortsTest.java
+@@ -8,6 +8,9 @@ import java.util.List;
+ import java.util.Map;
+ import java.util.Optional;
+ import net.minecraft.commands.arguments.NbtPathArgument;
++import net.minecraft.commands.arguments.selector.EntitySelector;
++import net.minecraft.commands.arguments.selector.EntitySelectorParser;
++import net.minecraft.commands.arguments.selector.options.EntitySelectorOptions;
+ import net.minecraft.core.HolderSet;
+ import net.minecraft.core.Registry;
+ import net.minecraft.core.RegistryAccess;
+@@ -21,6 +24,7 @@ import net.minecraft.network.codec.ByteBufCodecs;
+ import net.minecraft.resources.Identifier;
+ import net.minecraft.tags.TagKey;
+ import net.minecraft.world.item.Item;
++import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.scores.PlayerTeam;
+ import net.minecraft.world.scores.ScoreHolder;
+ import net.minecraft.world.scores.Scoreboard;
+@@ -87,6 +91,24 @@ class DatapackPortsTest {
+         assertEquals(1, ((ListTag) first.get("entries")).size());
+     }
+ 
++    @Test
++    @SuppressWarnings("unchecked")
++    void selectorRejectsMissingTagsBeforeReadingHealthButStillRejectsDeadMatches() throws Exception {
++        EntitySelectorOptions.bootStrap();
++        EntitySelector selector = new EntitySelectorParser(new StringReader("@e[tag=tinted]"), true).parse();
++        java.lang.reflect.Field field = EntitySelector.class.getDeclaredField("contextFreePredicates");
++        field.setAccessible(true);
++        List<java.util.function.Predicate<Entity>> predicates = (List<java.util.function.Predicate<Entity>>) field.get(selector);
++        Entity entity = mock(Entity.class);
++        when(entity.entityTags()).thenReturn(java.util.Set.of());
++        assertFalse(predicates.stream().allMatch(predicate -> predicate.test(entity)));
++        verify(entity, never()).isAlive();
++        when(entity.entityTags()).thenReturn(java.util.Set.of("tinted"));
++        when(entity.isAlive()).thenReturn(false);
++        assertFalse(predicates.stream().allMatch(predicate -> predicate.test(entity)));
++        verify(entity).isAlive();
++    }
++
+     @Test
+     @SuppressWarnings("unchecked")
+     void undefinedUnboundHolderTagIsEncodedAsAnEmptyDirectSet() {

@@ -1,0 +1,66 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 03:30:26 -0300
+Subject: [PATCH] Port DPO scoreboard save and tracked-holder recovery
+
+
+diff --git a/net/minecraft/world/scores/PlayerTeam.java b/net/minecraft/world/scores/PlayerTeam.java
+index 2bdbb8451974f0b8d6e94d390ac735f4ccffd954..84327c638d101725d100ed27f99aa72e60151f4d 100644
+--- a/net/minecraft/world/scores/PlayerTeam.java
++++ b/net/minecraft/world/scores/PlayerTeam.java
+@@ -56,10 +56,30 @@ public class PlayerTeam extends Team {
+             this.nameTagVisibility,
+             this.deathMessageVisibility,
+             this.collisionRule,
+-            List.copyOf(this.players)
++            this.tinted$packMembers() // TintedPaper - tolerate a null member while saving teams
+         );
+     }
+ 
++    // TintedPaper start - DPO scoreboard save recovery
++    private List<String> tinted$packMembers() {
++        try {
++            return List.copyOf(this.players);
++        } catch (NullPointerException nullMember) {
++            for (int attempt = 1; ; ++attempt) {
++                try {
++                    List<String> members = new java.util.ArrayList<>();
++                    for (String member : this.players) {
++                        if (member != null) members.add(member);
++                    }
++                    return java.util.Collections.unmodifiableList(members);
++                } catch (java.util.ConcurrentModificationException racedWalk) {
++                    if (attempt >= 5) throw racedWalk;
++                }
++            }
++        }
++    }
++    // TintedPaper end - DPO scoreboard save recovery
++
+     public Scoreboard getScoreboard() {
+         return this.scoreboard;
+     }
+diff --git a/net/minecraft/world/scores/Scoreboard.java b/net/minecraft/world/scores/Scoreboard.java
+index ccff13ea50431fbde5b1e0238a8534fab06aa786..a8a4ed64a54c9103963f6e6774dfa1798b2851ef 100644
+--- a/net/minecraft/world/scores/Scoreboard.java
++++ b/net/minecraft/world/scores/Scoreboard.java
+@@ -183,7 +183,18 @@ public class Scoreboard {
+     }
+ 
+     public Collection<ScoreHolder> getTrackedPlayers() {
+-        return this.playerScores.keySet().stream().map(ScoreHolder::forNameOnly).toList();
++        // TintedPaper start - DPO recovery for a fastutil size counter corrupted by an async writer
++        for (int attempt = 1; ; ++attempt) {
++            try {
++                List<ScoreHolder> result = new ArrayList<>(Math.max(16, Math.min(this.playerScores.size(), 1 << 20)));
++                this.playerScores.keySet().forEach(name -> result.add(ScoreHolder.forNameOnly(name)));
++                return java.util.Collections.unmodifiableList(result);
++            } catch (IllegalStateException | java.util.ConcurrentModificationException
++                     | ArrayIndexOutOfBoundsException | NullPointerException racedWalk) {
++                if (attempt >= 5) throw racedWalk;
++            }
++        }
++        // TintedPaper end - DPO scoreboard recovery
+     }
+ 
+     public void resetAllPlayerScores(final ScoreHolder player) {

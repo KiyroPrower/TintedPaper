@@ -1,0 +1,100 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 07:42:26 -0300
+Subject: [PATCH] Discover native datapack regressions and initialize Gale test
+ configuration
+
+
+diff --git a/src/test/java/io/papermc/paper/configuration/GlobalConfigTestingBase.java b/src/test/java/io/papermc/paper/configuration/GlobalConfigTestingBase.java
+index 355dcdb7cc5d748ae7ccfa368297367bc7edf308..4626260182c63b90fddee0dab82242a8fda52250 100644
+--- a/src/test/java/io/papermc/paper/configuration/GlobalConfigTestingBase.java
++++ b/src/test/java/io/papermc/paper/configuration/GlobalConfigTestingBase.java
+@@ -13,6 +13,7 @@ public final class GlobalConfigTestingBase {
+             try {
+                 GlobalConfiguration globalConfiguration = node.require(GlobalConfiguration.class);
+                 GlobalConfiguration.set(globalConfiguration);
++                org.galemc.gale.configuration.GaleConfigTestingBase.setup(node);
+             } catch (SerializationException e) {
+                 throw new RuntimeException(e);
+             }
+diff --git a/src/test/java/dev/kiyro/tinted/DatapackPortsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java
+similarity index 74%
+rename from src/test/java/dev/kiyro/tinted/DatapackPortsTest.java
+rename to src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java
+index 3686869924a53953f832e1ed38e2fc2b2f29a1d8..85cbcc4700c5b39e061d22b588df6c9e39a0a5c3 100644
+--- a/src/test/java/dev/kiyro/tinted/DatapackPortsTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java
+@@ -1,4 +1,4 @@
+-package dev.kiyro.tinted;
++package org.bukkit.craftbukkit.tinted;
+ 
+ import com.mojang.brigadier.StringReader;
+ import com.mojang.brigadier.exceptions.CommandSyntaxException;
+@@ -36,6 +36,35 @@ import static org.mockito.Mockito.*;
+ 
+ @Normal
+ class DatapackPortsTest {
++    @Test
++    void dirtPathsCheckTheBlockCarriedByAPiston() {
++        net.minecraft.core.BlockPos pos = net.minecraft.core.BlockPos.ZERO;
++        net.minecraft.world.level.LevelReader level = mock(net.minecraft.world.level.LevelReader.class);
++        net.minecraft.world.level.block.piston.PistonMovingBlockEntity moving = mock(net.minecraft.world.level.block.piston.PistonMovingBlockEntity.class);
++        when(level.getBlockState(pos.above())).thenReturn(net.minecraft.world.level.block.Blocks.MOVING_PISTON.defaultBlockState());
++        when(level.getBlockEntity(pos.above())).thenReturn(moving);
++        net.minecraft.world.level.block.state.BlockState path = net.minecraft.world.level.block.Blocks.DIRT_PATH.defaultBlockState();
++        when(moving.getMovedState()).thenReturn(net.minecraft.world.level.block.Blocks.CARPET.get(net.minecraft.world.item.DyeColor.WHITE).defaultBlockState());
++        assertTrue(path.canSurvive(level, pos));
++        when(moving.getMovedState()).thenReturn(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
++        assertFalse(path.canSurvive(level, pos));
++        when(moving.getMovedState()).thenReturn(net.minecraft.world.level.block.Blocks.OAK_FENCE_GATE.defaultBlockState());
++        assertTrue(path.canSurvive(level, pos));
++        when(level.getBlockEntity(pos.above())).thenReturn(null);
++        assertEquals(!net.minecraft.world.level.block.Blocks.MOVING_PISTON.defaultBlockState().isSolid(), path.canSurvive(level, pos));
++    }
++
++    @Test
++    void parsedEmptyContainersNeverShareMutableState() throws Exception {
++        CompoundTag first = TagParser.parseCompoundFully("{entries:[], nested:{}}");
++        CompoundTag second = TagParser.parseCompoundFully("{entries:[], nested:{}}");
++        ((ListTag) first.get("entries")).add(new CompoundTag());
++        ((CompoundTag) first.get("nested")).putInt("value", 1);
++        assertTrue(((ListTag) second.get("entries")).isEmpty());
++        assertTrue(((CompoundTag) second.get("nested")).isEmpty());
++        assertTrue(TagParser.parseCompoundFully("{}").isEmpty());
++    }
++
+     @Test
+     void nullTeamMemberDoesNotPreventSavingValidMembers() {
+         PlayerTeam team = new PlayerTeam(new Scoreboard(), "test");
+@@ -81,8 +110,10 @@ class DatapackPortsTest {
+     @Test
+     void filteredPathsCreateIndependentPatternsAndReadExistingMatches() throws Exception {
+         NbtPathArgument.NbtPath path = NbtPathArgument.NbtPath.of("entries[{id:1}]");
+-        CompoundTag first = TagParser.parseCompoundFully("{entries:[]}");
+-        CompoundTag second = TagParser.parseCompoundFully("{entries:[]}");
++        CompoundTag first = new CompoundTag();
++        first.put("entries", new ListTag());
++        CompoundTag second = new CompoundTag();
++        second.put("entries", new ListTag());
+         List<net.minecraft.nbt.Tag> created = path.getOrCreate(first, CompoundTag::new);
+         List<net.minecraft.nbt.Tag> other = path.getOrCreate(second, CompoundTag::new);
+         assertEquals(1, created.size());
+diff --git a/src/test/java/org/galemc/gale/configuration/GaleConfigTestingBase.java b/src/test/java/org/galemc/gale/configuration/GaleConfigTestingBase.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..f1ccfdafb1105e659ec3ce50d7a9558cfe80e820
+--- /dev/null
++++ b/src/test/java/org/galemc/gale/configuration/GaleConfigTestingBase.java
+@@ -0,0 +1,13 @@
++package org.galemc.gale.configuration;
++
++import org.spongepowered.configurate.ConfigurationNode;
++import org.spongepowered.configurate.serialize.SerializationException;
++
++public final class GaleConfigTestingBase {
++
++    public static void setup(ConfigurationNode node) throws SerializationException {
++        if (GaleGlobalConfiguration.get() == null) {
++            GaleGlobalConfiguration.set(node.require(GaleGlobalConfiguration.class));
++        }
++    }
++}

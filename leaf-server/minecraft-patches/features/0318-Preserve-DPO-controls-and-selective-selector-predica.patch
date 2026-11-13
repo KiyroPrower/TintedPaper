@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 03:41:42 -0300
+Subject: [PATCH] Preserve DPO controls and selective selector predicate
+ ordering
+
+
+diff --git a/net/minecraft/commands/arguments/NbtPathArgument.java b/net/minecraft/commands/arguments/NbtPathArgument.java
+index 31927a440836014db1224aa3ade661ab105adb5d..7dbbd357a8e2b703fbfd77f3f854b6abe1fb9332 100644
+--- a/net/minecraft/commands/arguments/NbtPathArgument.java
++++ b/net/minecraft/commands/arguments/NbtPathArgument.java
+@@ -415,6 +415,8 @@ public class NbtPathArgument implements ArgumentType<NbtPathArgument.NbtPath> {
+                 // TintedPaper start - DPO filtered NBT list loops
+                 if (org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtListMatchLoops && parent.getClass() == ListTag.class) {
+                     java.util.Spliterator<Tag> elements = list.spliterator();
++                    java.util.Objects.requireNonNull(this.predicate);
++                    java.util.Objects.requireNonNull(output);
+                     elements.getExactSizeIfKnown();
+                     elements.forEachRemaining(element -> { if (this.predicate.test(element)) output.add(element); });
+                     return;
+diff --git a/net/minecraft/commands/arguments/selector/EntitySelectorParser.java b/net/minecraft/commands/arguments/selector/EntitySelectorParser.java
+index d15219cfc49d462f0b6498c67bbc5e092dc52d42..bb33082cb612f01118693bafa9e0d269cacbaf82 100644
+--- a/net/minecraft/commands/arguments/selector/EntitySelectorParser.java
++++ b/net/minecraft/commands/arguments/selector/EntitySelectorParser.java
+@@ -90,6 +90,7 @@ public class EntitySelectorParser {
+     private MinMaxBounds.@Nullable FloatDegrees rotX;
+     private MinMaxBounds.@Nullable FloatDegrees rotY;
+     private final List<Predicate<Entity>> predicates = new ArrayList<>();
++    private @Nullable Predicate<Entity> tinted$aliveCheck; // TintedPaper - DPO selector predicate ordering
+     private BiConsumer<Vec3, List<? extends Entity>> order = EntitySelector.ORDER_ARBITRARY;
+     private boolean currentEntity;
+     private @Nullable String playerName;
+@@ -127,6 +128,14 @@ public class EntitySelectorParser {
+     }
+ 
+     public EntitySelector getSelector() {
++        // TintedPaper start - retain the native alive predicate, but evaluate selective options first
++        if (this.tinted$aliveCheck != null) {
++            if (org.dreeam.leaf.config.modules.opt.DatapackOptimizations.selectorAliveCheckLast && this.predicates.remove(this.tinted$aliveCheck)) {
++                this.predicates.add(this.tinted$aliveCheck);
++            }
++            this.tinted$aliveCheck = null;
++        }
++        // TintedPaper end - DPO selector predicate ordering
+         AABB aabb;
+         if (this.deltaX == null && this.deltaY == null && this.deltaZ == null) {
+             if (this.distance != null && this.distance.max().isPresent()) {
+@@ -256,7 +265,8 @@ public class EntitySelectorParser {
+                 yield false;
+             }
+         }) {
+-            this.predicates.add(Entity::isAlive);
++            this.tinted$aliveCheck = Entity::isAlive; // TintedPaper - DPO selector predicate ordering
++            this.predicates.add(this.tinted$aliveCheck);
+         }
+ 
+         this.suggestions = this::suggestOpenOptions;
+diff --git a/net/minecraft/world/scores/PlayerTeam.java b/net/minecraft/world/scores/PlayerTeam.java
+index 84327c638d101725d100ed27f99aa72e60151f4d..db57aab8b2b0c350ff8f8669436b42c2239e58af 100644
+--- a/net/minecraft/world/scores/PlayerTeam.java
++++ b/net/minecraft/world/scores/PlayerTeam.java
+@@ -62,6 +62,7 @@ public class PlayerTeam extends Team {
+ 
+     // TintedPaper start - DPO scoreboard save recovery
+     private List<String> tinted$packMembers() {
++        if (!org.dreeam.leaf.config.modules.opt.DatapackOptimizations.scoreboardTeamNullMember) return List.copyOf(this.players);
+         try {
+             return List.copyOf(this.players);
+         } catch (NullPointerException nullMember) {
+diff --git a/net/minecraft/world/scores/Scoreboard.java b/net/minecraft/world/scores/Scoreboard.java
+index a8a4ed64a54c9103963f6e6774dfa1798b2851ef..3f335a773aa9e5edc1235a9392ed70eb9b0a3570 100644
+--- a/net/minecraft/world/scores/Scoreboard.java
++++ b/net/minecraft/world/scores/Scoreboard.java
+@@ -184,6 +184,9 @@ public class Scoreboard {
+ 
+     public Collection<ScoreHolder> getTrackedPlayers() {
+         // TintedPaper start - DPO recovery for a fastutil size counter corrupted by an async writer
++        if (!org.dreeam.leaf.config.modules.opt.DatapackOptimizations.scoreboardTrackedPlayersRace) {
++            return this.playerScores.keySet().stream().map(ScoreHolder::forNameOnly).toList();
++        }
+         for (int attempt = 1; ; ++attempt) {
+             try {
+                 List<ScoreHolder> result = new ArrayList<>(Math.max(16, Math.min(this.playerScores.size(), 1 << 20)));

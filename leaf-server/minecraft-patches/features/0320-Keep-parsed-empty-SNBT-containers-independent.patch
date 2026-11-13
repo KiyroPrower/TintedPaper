@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 07:42:11 -0300
+Subject: [PATCH] Keep parsed empty SNBT containers independent
+
+
+diff --git a/net/minecraft/nbt/SnbtGrammar.java b/net/minecraft/nbt/SnbtGrammar.java
+index ea95ef086ff548e32ec6bea355fe1248d6509183..783992640b3a16861afc44da8418a8c9a3dd0177 100644
+--- a/net/minecraft/nbt/SnbtGrammar.java
++++ b/net/minecraft/nbt/SnbtGrammar.java
+@@ -272,8 +272,6 @@ public class SnbtGrammar {
+     public static <T> Grammar<T> createParser(final DynamicOps<T> ops) {
+         T trueValue = ops.createBoolean(true);
+         T falseValue = ops.createBoolean(false);
+-        T emptyMapValue = ops.emptyMap();
+-        T emptyList = ops.emptyList();
+         Dictionary<StringReader> rules = new Dictionary<>();
+         Atom<SnbtGrammar.Sign> sign = Atom.of("sign");
+         rules.put(
+@@ -622,7 +620,7 @@ public class SnbtGrammar {
+         rules.put(mapLiteral, Term.sequence(StringReaderTerms.character('{'), Scope.increaseDepth(), rules.named(mapEntries), Scope.decreaseDepth(), StringReaderTerms.character('}')), scope -> { // Paper - track depth
+             List<Entry<String, T>> entries = scope.getOrThrow(mapEntries);
+             if (entries.isEmpty()) {
+-                return emptyMapValue;
++                return ops.emptyMap(); // TintedPaper - NBT containers are mutable; each parse owns its empty value
+             }
+ 
+             Builder<T, T> builder = ImmutableMap.builderWithExpectedSize(entries.size());
+@@ -675,7 +673,7 @@ public class SnbtGrammar {
+                     return entries.isEmpty() ? arrayType.create(ops) : arrayType.create(ops, entries, state);
+                 } else {
+                     List<T> entries = scope.getOrThrow(listEntries);
+-                    return entries.isEmpty() ? emptyList : ops.createList(entries.stream());
++                    return entries.isEmpty() ? ops.emptyList() : ops.createList(entries.stream()); // TintedPaper - do not share mutable empty lists
+                 }
+             }
+         );

@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 07:42:28 -0300
+Subject: [PATCH] Reroute legacy materials passed to AntiXray SDK callbacks
+
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/legacy/MaterialRerouting.java b/src/main/java/org/bukkit/craftbukkit/legacy/MaterialRerouting.java
+index 5aef45292bf6def0ed50a763a60541c9ae455b2d..2fdbef725a8a5da0f0949a7da2b1b8a5687ac24f 100644
+--- a/src/main/java/org/bukkit/craftbukkit/legacy/MaterialRerouting.java
++++ b/src/main/java/org/bukkit/craftbukkit/legacy/MaterialRerouting.java
+@@ -130,6 +130,10 @@ public class MaterialRerouting {
+         block.setType(MaterialRerouting.transformToBlockType(type));
+     }
+ 
++    public static void callBlockChange(dev.imanity.antixray.sdk.AntiXrayAdapter adapter, org.bukkit.World world, int x, int y, int z, Material material) {
++        adapter.callBlockChange(world, x, y, z, MaterialRerouting.transformToBlockType(material));
++    }
++
+     public static void setType(Block block, Material type, boolean applyPhysics) {
+         block.setType(MaterialRerouting.transformToBlockType(type), applyPhysics);
+     }
+diff --git a/src/test/java/org/bukkit/craftbukkit/legacy/MaterialReroutingTest.java b/src/test/java/org/bukkit/craftbukkit/legacy/MaterialReroutingTest.java
+index f6b04513355c0c56d30126faa667e22c9d989818..720fe86fa3aeff13f5834c7ccf475526bc2e6dbc 100644
+--- a/src/test/java/org/bukkit/craftbukkit/legacy/MaterialReroutingTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/legacy/MaterialReroutingTest.java
+@@ -31,6 +31,17 @@ import org.objectweb.asm.tree.MethodNode;
+ @Normal
+ public class MaterialReroutingTest {
+ 
++    @org.junit.jupiter.api.Test
++    @SuppressWarnings("deprecation")
++    void antiXrayCallbackConvertsLegacyMaterials() {
++        dev.imanity.antixray.sdk.AntiXrayAdapter adapter = org.mockito.Mockito.mock(dev.imanity.antixray.sdk.AntiXrayAdapter.class);
++        org.bukkit.World world = org.mockito.Mockito.mock(org.bukkit.World.class);
++        MaterialRerouting.callBlockChange(adapter, world, 1, 2, 3, org.bukkit.Material.LEGACY_STONE);
++        org.mockito.Mockito.verify(adapter).callBlockChange(world, 1, 2, 3, org.bukkit.Material.STONE);
++        MaterialRerouting.callBlockChange(adapter, world, 4, 5, 6, org.bukkit.Material.DIRT);
++        org.mockito.Mockito.verify(adapter).callBlockChange(world, 4, 5, 6, org.bukkit.Material.DIRT);
++    }
++
+     // Needs to be a bukkit class
+     private static final URI BUKKIT_CLASSES;
+     private static final Reroute MATERIAL_METHOD_REROUTE = RerouteBuilder.create(Predicates.alwaysTrue()).forClass(MaterialRerouting.class).build();

@@ -1,0 +1,138 @@
+{
+  "baseline": {
+    "minecraft": "26.3",
+    "fork": "3ab88076",
+    "paper": "df120fd8b5211f61146a59f69497a5a62064b917",
+    "dpo": "6bf15e3 plus preserved local recipe fixes",
+    "validation": "Owner authorized local compilation/tests on 2026-11-13. Patch generation and full reapplication succeeded. :leaf-server:test createLeafclipJar passed: JUnit XML totals 10180 cases, 10094 passed, 0 failed, 86 skipped, including all 12 native DPO regressions. No runtime server, benchmark or production deployment."
+  },
+  "groups": [
+    {
+      "status": "native-behaviour-ported",
+      "reason": "Native NbtPath preclassifies compound-only paths of 2-32 nodes and reuses one mutable result list. Every read observes current tags, preserves missing-path errors and falls back to native traversal for a changed/branching node. Native config toggle and parity/mutation/fallback regression tests included.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/commands/arguments/NbtPathArgument.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java"],
+      "mixins": ["commands.NbtPathReadPlanMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "26.3 CommandSourceStack.withEntity stores the shared NamesProvider.FOR_ENTITY. Both getters resolve entity names only when called, so native vanilla already supplies DPO's lazy-name behavior without sentinels or runtime weaving probes.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/commands/CommandSourceStack.java"],
+      "mixins": ["commands.CommandSourceStackLazyNamesMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "CubePointRange already precomputes a final reciprocal and multiplies in getDouble. Keep Gale's native implementation.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/phys/shapes/CubePointRange.java"],
+      "mixins": ["gale.CubePointRangeMultiplyMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "Leaf AttributeMap implements Consumer and passes this directly to supplier.createInstance after an indexed-map lookup. No per-call capturing lambda or extra factory cache is needed.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/entity/ai/attributes/AttributeMap.java"],
+      "mixins": ["pufferfish.AttributeMapInstanceCacheMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "26.3 Enderman.teleport delegates to LivingEntity.randomTeleport, which checks hasChunkAt before reading ground blocks or calling canRandomlyTeleportTo. Preserve world-border clamping before that check.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/entity/monster/Enderman.java", "leaf-server/src/minecraft/java/net/minecraft/world/entity/LivingEntity.java"],
+      "mixins": ["pufferfish.EnderManTeleportSkipUnloadedChunkMixin"]
+    },
+    {
+      "status": "native-behaviour-ported",
+      "reason": "Three immutable coordinate ranges are initialized before Moonrise's cache initialization and reused by getCoords; no lazy mutable cache or extra synchronization is needed.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/phys/shapes/CubeVoxelShape.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java"],
+      "mixins": ["gale.CubeVoxelShapeCoordsCacheMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "CraftEntityType.minecraftToBukkit already uses a concurrent cache controlled by EnableCachedMTBEntityTypeConvert. Preserve the existing null/registry validation and native toggle.",
+      "evidence": ["paper-server/src/main/java/org/bukkit/craftbukkit/entity/CraftEntityType.java"],
+      "mixins": ["cache.CraftEntityTypeBukkitCacheMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "All three native composter containers already return Gale/JettPack cached empty/zero-singleton int arrays, preserving the UP/DOWN face conditions.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/level/block/ComposterBlock.java"],
+      "mixins": ["lithium.alloc.ComposterInputContainerMixin", "lithium.alloc.ComposterEmptyContainerMixin", "lithium.alloc.ComposterOutputContainerMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "Native TargetingConditions rejects candidates beyond maximumVisibilityDistance before getVisibilityPercent, including the new MobVisibility.MAX_VISIBILITY multiplier. Keep the current visibility/follow-range semantics.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/entity/ai/targeting/TargetingConditions.java"],
+      "mixins": ["gale.TargetingConditionsRangeBeforeVisibilityMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "Gale predicts Halloween start/end epochs in SpecialDates; do not stack DPO's hourly date cache over that native mechanism.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/util/SpecialDates.java"],
+      "mixins": ["pufferfish.SpecialDatesIsHalloweenCacheMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "Profiler.get already returns InactiveProfiler.INSTANCE when LeafConstants.DISABLE_VANILLA_PROFILER is enabled. Retain that native control.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/util/profiling/Profiler.java"],
+      "mixins": ["plazma.VanillaProfilerDisableMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "26.3 replaced SurfaceRules.SequenceRule with material.rule.SequenceRule. compile() builds a RuleEvaluator array; the hot traversal is an array loop, so there is no List iterator allocation to remove.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/level/levelgen/material/rule/SequenceRule.java"],
+      "mixins": ["worldgen.SequenceRuleMixin"]
+    },
+    {
+      "status": "not-applicable",
+      "reason": "These target the removed 26.2 scalar NoiseChunk pipeline (BlockStateFiller/MaterialRuleList, wrap/wrapped, Cache2D.compute and preliminary-surface methods). The complete 26.3 NoiseChunk is now a DensitySamplerSet/DensityBufferPool volume owner. Preserve that new pipeline instead of resurrecting the removed scalar implementation.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/level/levelgen/NoiseChunk.java"],
+      "mixins": ["worldgen.MaterialRuleListMixin", "worldgen.NoiseChunkWrapCacheMixin", "worldgen.NoiseChunkCache2DColumnMixin", "worldgen.NoiseChunkSharedPreliminaryMixin"]
+    },
+    {
+      "status": "not-applicable",
+      "reason": "ImprovedNoise and its double noise/sampleAndLerp interface were replaced in 26.3. Native PerlinNoise extends GradientNoise, uses float samples and already has Moonrise permutation/gradient acceleration. Do not transplant the 26.2 double interpolation formula into the new terrain pipeline.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/level/levelgen/synth/PerlinNoise.java", "leaf-server/src/minecraft/java/net/minecraft/world/level/levelgen/synth/GradientNoise.java"],
+      "mixins": ["worldgen.PerlinNoiseSamplerMixin"]
+    },
+    {
+      "status": "native-behaviour-ported",
+      "reason": "DirtPathBlock became PathBlock in 26.3. The native fix checks the carried piston state only for DIRT_PATH, preserving other potential PathBlock variants, the fence-gate exception and missing-block-entity fallback. Includes a native config toggle and regression test.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/world/level/block/PathBlock.java"],
+      "native_sources": ["leaf-server/src/minecraft/java/net/minecraft/world/level/block/PathBlock.java"],
+      "mixins": ["MovingBlocksDestroyPathMixin"]
+    },
+    {
+      "status": "native-behaviour-ported",
+      "reason": "Direct native implementations with Leaf configuration controls; diagnostic commands and remaining DPO modules are still pending.",
+      "evidence": ["leaf-server/minecraft-patches/features/0316-Port-DPO-scoreboard-save-and-tracked-holder-recovery.patch", "leaf-server/minecraft-patches/features/0317-Port-DPO-NBT-path-caching-and-undefined-holder-tag-e.patch", "leaf-server/minecraft-patches/features/0318-Preserve-DPO-controls-and-selective-selector-predica.patch"],
+      "mixins": ["PlayerTeamNullMemberMixin", "ScoreboardTrackedPlayersRaceMixin", "commands.NbtPathArgumentCacheMixin", "commands.NbtPathMatchElementLoopMixin", "network.HolderSetUnknownTagMixin", "commands.EntitySelectorAliveCheckLastMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "The scheduler already uses Moonrise ReferenceList identity indexing with swap removal. Do not introduce another index.",
+      "evidence": ["paper-server/src/main/java/io/papermc/paper/threadedregions/EntityScheduler.java", "paper-server/src/main/java/ca/spottedleaf/moonrise/common/list/ReferenceList.java"],
+      "mixins": ["scheduler.EntitySchedulerTickListIndexedMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "EntitySelectorParser.getSelector already derives an AABB when distance has a maximum; retain the 26.3 native semantics.",
+      "evidence": ["leaf-server/src/minecraft/java/net/minecraft/commands/arguments/selector/EntitySelectorParser.java"],
+      "mixins": ["commands.EntitySelectorDistanceAabbMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "Leaf Paw optimization already replaces the per-call direction values clones with Direction.VALUES in these target methods. MultifaceBlock's remaining static initializer is not a per-call clone.",
+      "evidence": ["leaf-server/minecraft-patches/features/0221-Paw-optimization.patch"],
+      "mixins": ["pluto.alloc.AmphibiousNodeEvaluatorEnumValuesMixin", "pluto.alloc.BaseCoralPlantTypeBlockEnumValuesMixin", "pluto.alloc.BaseFireBlockEnumValuesMixin", "pluto.alloc.BlockPatternEnumValuesMixin", "pluto.alloc.ConcretePowderBlockEnumValuesMixin", "pluto.alloc.CoralBlockEnumValuesMixin", "pluto.alloc.CreakingHeartBlockEnumValuesMixin", "pluto.alloc.DefaultRedstoneWireEvaluatorEnumValuesMixin", "pluto.alloc.DiodeBlockEnumValuesMixin", "pluto.alloc.FireBlockEnumValuesMixin", "pluto.alloc.FrostedIceBlockEnumValuesMixin", "pluto.alloc.LavaFluidEnumValuesMixin", "pluto.alloc.LeavesBlockEnumValuesMixin", "pluto.alloc.MultifaceBlockEnumValuesMixin", "pluto.alloc.OrientationEnumValuesMixin", "pluto.alloc.RedStoneOreBlockEnumValuesMixin", "pluto.alloc.RedstoneTorchBlockEnumValuesMixin", "pluto.alloc.SculkSensorBlockEnumValuesMixin", "pluto.alloc.ShulkerEnumValuesMixin", "pluto.alloc.SwimNodeEvaluatorEnumValuesMixin", "pluto.alloc.TheEndGatewayBlockEntityEnumValuesMixin"]
+    },
+    {
+      "status": "covered-by-base",
+      "reason": "ConnectionLazyExecuteMixin is a general Connection optimization, not a DivineMC-only target. Leaf already carries the upstream lazy non-flush patch and its native toggle.",
+      "evidence": ["leaf-server/minecraft-patches/features/0186-Optimise-non-flush-packet-sending.patch"],
+      "mixins": ["divinemc.ConnectionLazyExecuteMixin"]
+    },
+    {
+      "status": "not-applicable",
+      "reason": "Targets org.bxteam.divinemc.async.rct.RegionizedChunkTicking. TintedPaper does not contain that DivineMC subsystem; its parallel world/tracker implementation must retain its own ownership model.",
+      "evidence": ["DatapackOptimizer/src/main/java/com/kiyroprower/datapackoptimizer/mixin/threads/RegionSinglePhaseMixin.java"],
+      "mixins": ["threads.RegionSinglePhaseMixin"]
+    }
+  ]
+}

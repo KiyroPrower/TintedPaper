@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 07:45:19 -0300
+Subject: [PATCH] Use 26.3 carpet collection in piston regression fixture
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java
+index 85cbcc4700c5b39e061d22b588df6c9e39a0a5c3..c37db1122b44d5217f450ab8575f11fb3528abc5 100644
+--- a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackPortsTest.java
+@@ -44,8 +44,10 @@ class DatapackPortsTest {
+         when(level.getBlockState(pos.above())).thenReturn(net.minecraft.world.level.block.Blocks.MOVING_PISTON.defaultBlockState());
+         when(level.getBlockEntity(pos.above())).thenReturn(moving);
+         net.minecraft.world.level.block.state.BlockState path = net.minecraft.world.level.block.Blocks.DIRT_PATH.defaultBlockState();
+-        when(moving.getMovedState()).thenReturn(net.minecraft.world.level.block.Blocks.CARPET.get(net.minecraft.world.item.DyeColor.WHITE).defaultBlockState());
++        when(moving.getMovedState()).thenReturn(net.minecraft.world.level.block.Blocks.CARPET.white().defaultBlockState());
+         assertTrue(path.canSurvive(level, pos));
++        when(moving.getMovedState()).thenReturn(net.minecraft.world.level.block.Blocks.OAK_SLAB.defaultBlockState());
++        assertEquals(!net.minecraft.world.level.block.Blocks.OAK_SLAB.defaultBlockState().isSolid(), path.canSurvive(level, pos));
+         when(moving.getMovedState()).thenReturn(net.minecraft.world.level.block.Blocks.STONE.defaultBlockState());
+         assertFalse(path.canSurvive(level, pos));
+         when(moving.getMovedState()).thenReturn(net.minecraft.world.level.block.Blocks.OAK_FENCE_GATE.defaultBlockState());
