@@ -1,0 +1,429 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 13:03:10 -0300
+Subject: [PATCH] Test clientbound team packet consistency and lifecycle
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/ClientboundTeamPacketGuardTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/ClientboundTeamPacketGuardTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..31b27c06756df4dbb484c9fd72189fd0a10ff731
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/ClientboundTeamPacketGuardTest.java
+@@ -0,0 +1,417 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.netty.buffer.ByteBuf;
++import io.netty.buffer.Unpooled;
++import io.netty.channel.ChannelOutboundHandlerAdapter;
++import io.netty.channel.ChannelFuture;
++import io.netty.channel.embedded.EmbeddedChannel;
++import io.netty.handler.codec.EncoderException;
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.List;
++import net.minecraft.core.RegistryAccess;
++import net.minecraft.network.ConnectionProtocol;
++import net.minecraft.network.CompressionEncoder;
++import net.minecraft.network.CompressionDecoder;
++import net.minecraft.network.HandlerNames;
++import net.minecraft.network.PacketBundleUnpacker;
++import net.minecraft.network.ProtocolInfo;
++import net.minecraft.network.RegistryFriendlyByteBuf;
++import net.minecraft.network.VarInt;
++import net.minecraft.network.Varint21LengthFieldPrepender;
++import net.minecraft.network.UnconfiguredPipelineHandler;
++import net.minecraft.network.chat.Component;
++import net.minecraft.network.codec.StreamCodec;
++import net.minecraft.network.protocol.Packet;
++import net.minecraft.network.protocol.PacketFlow;
++import net.minecraft.network.protocol.common.ClientboundKeepAlivePacket;
++import net.minecraft.network.protocol.game.ClientGamePacketListener;
++import net.minecraft.network.protocol.game.ClientboundBundlePacket;
++import net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket;
++import net.minecraft.network.protocol.game.GameProtocols;
++import net.minecraft.network.protocol.game.ClientboundStartConfigurationPacket;
++import net.minecraft.world.scores.PlayerTeam;
++import net.minecraft.world.scores.Scoreboard;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket.Action.*;
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class ClientboundTeamPacketGuardTest {
++    @Test
++    void removingAnEntryNeverAddedToPlayerTeamProducesNoFrameAndCompletesTheWrite() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam team = team("player");
++            wire.send(create(team));
++            assertEquals(List.of(), wire.send(member(team, "joining-player", REMOVE)));
++            assertNotNull(wire.client.getPlayerTeam("player"));
++            assertNull(wire.client.getPlayersTeam("joining-player"));
++        }
++    }
++
++    @Test
++    void delayedRemovalFromOldTeamDoesNotDisconnectOrRemoveTheNewMembership() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam old = team("player", "alice");
++            PlayerTeam current = team("nametag");
++            wire.send(create(old));
++            wire.send(create(current));
++            wire.send(member(current, "alice", ADD));
++            assertEquals(List.of(), wire.send(member(old, "alice", REMOVE)));
++            assertEquals("nametag", wire.client.getPlayersTeam("alice").getName());
++            assertTrue(old.getPlayers().contains("alice"), "The live server team must not be mutated");
++        }
++    }
++
++    @Test
++    void validRemovalReachesTheClientButARepeatedRemovalDoesNot() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam team = team("player", "alice");
++            wire.send(create(team));
++            assertEquals(1, wire.send(member(team, "alice", REMOVE)).size());
++            assertNull(wire.client.getPlayersTeam("alice"));
++            assertEquals(List.of(), wire.send(member(team, "alice", REMOVE)));
++        }
++    }
++
++    @Test
++    void mixedBulkRemovalKeepsValidEntriesInOrderAndDeduplicatesThem() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam team = team("player", "alice", "bob", "carol");
++            PlayerTeam other = team("other");
++            wire.send(create(team));
++            wire.send(create(other));
++            wire.send(member(other, "bob", ADD));
++            var removal = ClientboundSetPlayerTeamPacket.createMultiplePlayerPacket(team,
++                List.of("alice", "bob", "alice", "missing", "carol"), REMOVE);
++            var filtered = (ClientboundSetPlayerTeamPacket) wire.send(removal).getFirst();
++            assertEquals(List.of("alice", "carol"), List.copyOf(filtered.getPlayers()));
++            assertEquals(List.of("alice", "bob", "alice", "missing", "carol"), List.copyOf(removal.getPlayers()));
++            assertEquals("other", wire.client.getPlayersTeam("bob").getName());
++            assertNull(wire.client.getPlayersTeam("alice"));
++            assertNull(wire.client.getPlayersTeam("carol"));
++        }
++    }
++
++    @Test
++    void removingAndRecreatingATeamDoesNotKeepItsOldMemberships() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam old = team("player", "alice", "bob");
++            PlayerTeam other = team("other");
++            wire.send(create(old));
++            wire.send(create(other));
++            wire.send(member(other, "alice", ADD));
++            wire.send(ClientboundSetPlayerTeamPacket.createRemovePacket(old));
++            PlayerTeam recreated = team("player");
++            wire.send(create(recreated));
++            assertEquals(List.of(), wire.send(member(recreated, "bob", REMOVE)));
++            assertEquals(List.of(), wire.send(member(recreated, "alice", REMOVE)));
++            assertEquals("other", wire.client.getPlayersTeam("alice").getName());
++            wire.send(member(recreated, "bob", ADD));
++            assertEquals(1, wire.send(member(recreated, "bob", REMOVE)).size());
++        }
++    }
++
++    @Test
++    void repeatedTeamCreationRetainsTheClientsExistingMembers() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam first = team("player", "alice");
++            wire.send(create(first));
++            wire.send(create(team("player", "bob")));
++            assertEquals(1, wire.send(member(first, "alice", REMOVE)).size());
++            assertEquals(1, wire.send(member(first, "bob", REMOVE)).size());
++        }
++    }
++
++    @Test
++    void updatesForUnknownTeamsDoNotChangeTheTrackedClientMembership() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam known = team("known", "alice");
++            PlayerTeam unknown = team("unknown");
++            wire.send(create(known));
++            assertEquals(1, wire.send(member(unknown, "alice", ADD)).size());
++            assertEquals(1, wire.send(member(unknown, "alice", REMOVE)).size());
++            assertEquals(1, wire.send(member(known, "alice", REMOVE)).size());
++        }
++    }
++
++    @Test
++    void eachClientKeepsItsOwnTeamState() {
++        try (Wire first = new Wire(); Wire second = new Wire()) {
++            PlayerTeam team = team("player", "alice");
++            first.send(create(team));
++            second.send(create(team("player")));
++            assertEquals(1, first.send(member(team, "alice", REMOVE)).size());
++            assertEquals(List.of(), second.send(member(team, "alice", REMOVE)));
++        }
++    }
++
++    @Test
++    void bundlesKeepTheirBoundariesAndOnlyDropTheStaleSubpacket() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam old = team("player", "alice");
++            PlayerTeam current = team("other");
++            List<Packet<? super ClientGamePacketListener>> packets = List.of(create(old), create(current),
++                member(current, "alice", ADD), member(old, "alice", REMOVE), new ClientboundKeepAlivePacket(99L));
++            List<Packet<?>> received = wire.send(new ClientboundBundlePacket(packets));
++            assertEquals(6, received.size()); // Two bundle delimiters, three team packets, one keep-alive.
++            assertEquals(3, received.stream().filter(ClientboundSetPlayerTeamPacket.class::isInstance).count());
++            assertEquals("other", wire.client.getPlayersTeam("alice").getName());
++            assertEquals(99L, ((ClientboundKeepAlivePacket) received.get(4)).getId());
++        }
++    }
++
++    @Test
++    void teamParametersAndUnrelatedPacketsKeepTheirWireRepresentation() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam team = team("player", "alice");
++            team.setPlayerPrefix(Component.literal("[prefix] "));
++            team.setPlayerSuffix(Component.literal(" suffix"));
++            var created = (ClientboundSetPlayerTeamPacket) wire.send(create(team)).getFirst();
++            assertEquals(team.getPlayerPrefix(), created.getParameters().orElseThrow().playerPrefix());
++            team.setPlayerPrefix(Component.literal("updated"));
++            var modified = (ClientboundSetPlayerTeamPacket) wire.send(ClientboundSetPlayerTeamPacket.createAddOrModifyPacket(team, false)).getFirst();
++            assertEquals(team.getPlayerPrefix(), modified.getParameters().orElseThrow().playerPrefix());
++            assertEquals(team.getPlayerSuffix(), modified.getParameters().orElseThrow().playerSuffix());
++            assertEquals(123L, ((ClientboundKeepAlivePacket) wire.send(new ClientboundKeepAlivePacket(123L)).getFirst()).getId());
++            assertEquals(1, wire.send(member(team, "alice", REMOVE)).size());
++        }
++    }
++
++    @Test
++    void failedEncodingDoesNotAdvanceTrackedMemberships() {
++        ProtocolInfo<ClientGamePacketListener> base = protocol();
++        PlayerTeam first = team("player", "alice");
++        var rejected = create(team("other", "alice"));
++        StreamCodec<ByteBuf, Packet<? super ClientGamePacketListener>> codec = StreamCodec.of((output, packet) -> {
++            if (packet == rejected) throw new EncoderException("Deliberate encoding failure");
++            base.codec().encode(output, packet);
++        }, base.codec()::decode);
++        @SuppressWarnings("unchecked")
++        ProtocolInfo<ClientGamePacketListener> failing = mock(ProtocolInfo.class);
++        when(failing.id()).thenReturn(ConnectionProtocol.PLAY);
++        when(failing.flow()).thenReturn(PacketFlow.CLIENTBOUND);
++        when(failing.codec()).thenReturn(codec);
++        when(failing.bundlerInfo()).thenReturn(base.bundlerInfo());
++        try (Wire wire = new Wire(failing)) {
++            wire.send(create(first));
++            var future = wire.channel.writeAndFlush(rejected);
++            assertTrue(future.isDone());
++            assertFalse(future.isSuccess());
++            assertNull(wire.channel.readOutbound());
++            assertEquals(1, wire.send(member(first, "alice", REMOVE)).size());
++        }
++    }
++
++    @Test
++    void rawPluginPacketsAreTrackedBeforeNativeRemovals() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam old = team("player", "alice");
++            PlayerTeam current = team("other");
++            wire.send(create(old));
++            wire.send(create(current));
++            wire.channel.pipeline().addBefore(HandlerNames.ENCODER, "packet_listener", new ChannelOutboundHandlerAdapter());
++            ByteBuf raw = wire.encode(member(current, "alice", ADD));
++            assertEquals(1, wire.receive(wire.channel.pipeline().context("packet_listener").writeAndFlush(raw)).size());
++            assertEquals(0, raw.refCnt());
++            assertEquals(List.of(), wire.send(member(old, "alice", REMOVE)));
++            assertEquals("other", wire.client.getPlayersTeam("alice").getName());
++        }
++    }
++
++    @Test
++    void rawMixedAndStaleRemovalsReleaseTheirBuffers() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam team = team("player", "alice");
++            wire.send(create(team));
++            ByteBuf raw = wire.encode(ClientboundSetPlayerTeamPacket.createMultiplePlayerPacket(team,
++                List.of("missing", "alice", "alice"), REMOVE));
++            var filtered = (ClientboundSetPlayerTeamPacket) wire.send(raw).getFirst();
++            assertEquals(List.of("alice"), List.copyOf(filtered.getPlayers()));
++            assertEquals(0, raw.refCnt());
++            ByteBuf stale = wire.encode(member(team, "alice", REMOVE));
++            assertEquals(List.of(), wire.send(stale));
++            assertEquals(0, stale.refCnt());
++        }
++    }
++
++    @Test
++    void rawUnrelatedPacketKeepsItsBytesAndReaderIndex() {
++        try (Wire wire = new Wire()) {
++            ByteBuf raw = wire.encode(new ClientboundKeepAlivePacket(456L));
++            ByteBuf expected = raw.copy();
++            try {
++                assertTrue(wire.channel.writeAndFlush(raw).isSuccess());
++                ByteBuf frame = wire.channel.readOutbound();
++                try {
++                    assertEquals(expected.readableBytes(), VarInt.read(frame));
++                    assertEquals(expected, frame);
++                } finally {
++                    frame.release();
++                }
++                assertEquals(0, raw.refCnt());
++            } finally {
++                expected.release();
++            }
++        }
++    }
++
++    @Test
++    void malformedRawPacketFailsWithoutLeakingOrLearningMemberships() {
++        try (Wire wire = new Wire()) {
++            PlayerTeam team = team("player", "alice");
++            wire.send(create(team));
++            ByteBuf raw = wire.encode(create(team("other", "alice")));
++            raw.writerIndex(raw.writerIndex() - 1);
++            var future = wire.channel.writeAndFlush(raw);
++            assertTrue(future.isDone());
++            assertFalse(future.isSuccess());
++            assertEquals(0, raw.refCnt());
++            assertNull(wire.channel.readOutbound());
++            assertEquals(1, wire.send(member(team, "alice", REMOVE)).size());
++        }
++    }
++
++    @Test
++    void compressionAndTranslationAnchorsKeepTheGuardOnNativeBytes() {
++        try (Wire wire = new Wire()) {
++            wire.channel.pipeline().addAfter(HandlerNames.PREPENDER, HandlerNames.COMPRESS, new CompressionEncoder(1));
++            // Stand in for a translator installed before PLAY configuration.
++            wire.channel.pipeline().addAfter(HandlerNames.COMPRESS, "via-encoder", new ChannelOutboundHandlerAdapter());
++            wire.send(ClientboundStartConfigurationPacket.INSTANCE);
++            assertNull(wire.channel.pipeline().get("tintedpaper_team_guard"));
++            wire.configure();
++            List<String> names = wire.channel.pipeline().names();
++            assertTrue(names.indexOf("via-encoder") < names.indexOf("tintedpaper_team_guard"));
++            assertTrue(names.indexOf("tintedpaper_team_guard") < names.indexOf(HandlerNames.ENCODER));
++            PlayerTeam team = team("player", "alice");
++            wire.send(create(team));
++            assertEquals(1, wire.send(member(team, "alice", REMOVE)).size());
++            assertEquals(List.of(), wire.send(member(team, "alice", REMOVE)));
++            wire.channel.pipeline().remove(HandlerNames.COMPRESS);
++            wire.send(member(team, "alice", ADD));
++            assertEquals(1, wire.send(member(team, "alice", REMOVE)).size());
++        }
++    }
++
++    @Test
++    void returningToPlayStartsWithFreshTeamState() {
++        try (Wire wire = new Wire()) {
++            wire.send(create(team("player", "alice")));
++            wire.send(ClientboundStartConfigurationPacket.INSTANCE);
++            assertNull(wire.channel.pipeline().get("tintedpaper_team_guard"));
++            wire.client.removePlayerTeam(wire.client.getPlayerTeam("player"));
++            wire.configure();
++            PlayerTeam empty = team("player");
++            wire.send(create(empty));
++            assertEquals(List.of(), wire.send(member(empty, "alice", REMOVE)));
++        }
++    }
++
++    private static PlayerTeam team(String name, String... members) {
++        PlayerTeam team = new PlayerTeam(new Scoreboard(), name);
++        team.getPlayers().addAll(Arrays.asList(members));
++        return team;
++    }
++
++    private static ClientboundSetPlayerTeamPacket create(PlayerTeam team) {
++        return ClientboundSetPlayerTeamPacket.createAddOrModifyPacket(team, true);
++    }
++
++    private static ClientboundSetPlayerTeamPacket member(PlayerTeam team, String member, ClientboundSetPlayerTeamPacket.Action action) {
++        return ClientboundSetPlayerTeamPacket.createPlayerPacket(team, member, action);
++    }
++
++    private static ProtocolInfo<ClientGamePacketListener> protocol() {
++        return GameProtocols.CLIENTBOUND_TEMPLATE.bind(RegistryFriendlyByteBuf.decorator(RegistryAccess.EMPTY));
++    }
++
++    private static final class Wire implements AutoCloseable {
++        final Scoreboard client = new Scoreboard();
++        final ProtocolInfo<ClientGamePacketListener> protocol;
++        final EmbeddedChannel channel;
++
++        Wire() {
++            this(protocol());
++        }
++
++        Wire(ProtocolInfo<ClientGamePacketListener> protocol) {
++            this.protocol = protocol;
++            this.channel = new EmbeddedChannel();
++            this.channel.pipeline().addLast(HandlerNames.PREPENDER, new Varint21LengthFieldPrepender());
++            this.channel.pipeline().addLast(HandlerNames.OUTBOUND_CONFIG, new UnconfiguredPipelineHandler.Outbound());
++            this.configure();
++        }
++
++        void configure() {
++            var task = UnconfiguredPipelineHandler.setupOutboundProtocol(this.protocol).andThen(ctx ->
++                ctx.pipeline().addAfter(HandlerNames.ENCODER, HandlerNames.UNBUNDLER, new PacketBundleUnpacker(this.protocol.bundlerInfo())));
++            assertTrue(this.channel.writeAndFlush(task).isSuccess());
++        }
++
++        ByteBuf encode(Packet<? super ClientGamePacketListener> packet) {
++            ByteBuf bytes = Unpooled.buffer();
++            bytes.writeInt(123); // Exercise nonzero reader indices from raw packet writers.
++            bytes.readerIndex(4);
++            this.protocol.codec().encode(bytes, packet);
++            return bytes;
++        }
++
++        List<Packet<?>> send(Object packet) {
++            return this.receive(this.channel.writeAndFlush(packet));
++        }
++
++        List<Packet<?>> receive(ChannelFuture future) {
++            this.channel.runPendingTasks();
++            assertTrue(future.isDone());
++            assertTrue(future.isSuccess(), () -> String.valueOf(future.cause()));
++            List<Packet<?>> received = new ArrayList<>();
++            ByteBuf frame;
++            while ((frame = this.channel.readOutbound()) != null) {
++                try {
++                    int length = VarInt.read(frame);
++                    assertTrue(length > 0, "Never send an empty packet frame");
++                    assertEquals(length, frame.readableBytes());
++                    if (this.channel.pipeline().get(HandlerNames.COMPRESS) != null) {
++                        var decoder = new EmbeddedChannel(new CompressionDecoder(1, true));
++                        try {
++                            decoder.writeInbound(frame.retain());
++                            ByteBuf inflated = decoder.readInbound();
++                            frame.release();
++                            frame = inflated;
++                        } finally {
++                            decoder.finishAndReleaseAll();
++                        }
++                    }
++                    Packet<?> decoded = this.protocol.codec().decode(frame);
++                    assertFalse(frame.isReadable());
++                    received.add(decoded);
++                    if (decoded instanceof ClientboundSetPlayerTeamPacket team) this.apply(team);
++                } finally {
++                    frame.release();
++                }
++            }
++            return received;
++        }
++
++        private void apply(ClientboundSetPlayerTeamPacket packet) {
++            PlayerTeam team = packet.getTeamAction() == ADD ? this.client.addPlayerTeam(packet.getName())
++                : this.client.getPlayerTeam(packet.getName());
++            if (team == null) return;
++            if (packet.getPlayerAction() == ADD) {
++                for (String player : packet.getPlayers()) this.client.addPlayerToTeam(player, team);
++            } else if (packet.getPlayerAction() == REMOVE) {
++                for (String player : packet.getPlayers()) this.client.removePlayerFromTeam(player, team);
++            }
++            if (packet.getTeamAction() == REMOVE) this.client.removePlayerTeam(team);
++        }
++
++        @Override
++        public void close() {
++            this.channel.finishAndReleaseAll();
++        }
++    }
++}
