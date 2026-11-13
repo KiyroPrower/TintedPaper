@@ -1,0 +1,126 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 20:03:55 -0300
+Subject: [PATCH] Preserve Bukkit RCON framing and test DivineMC compatibility
+ ports
+
+
+diff --git a/src/main/java/org/bukkit/craftbukkit/command/CraftRemoteConsoleCommandSender.java b/src/main/java/org/bukkit/craftbukkit/command/CraftRemoteConsoleCommandSender.java
+index 7954d56c4fd5c5bd570d5ecdfd79a66276abdc98..c5a997590c04caf31312a76ec87bac0c8a96492c 100644
+--- a/src/main/java/org/bukkit/craftbukkit/command/CraftRemoteConsoleCommandSender.java
++++ b/src/main/java/org/bukkit/craftbukkit/command/CraftRemoteConsoleCommandSender.java
+@@ -24,7 +24,7 @@ public class CraftRemoteConsoleCommandSender extends ServerCommandSender impleme
+ 
+     @Override
+     public void sendMessage(String message) {
+-        this.listener.sendSystemMessage(Component.literal(message + "\n")); // Send a newline after each message, to preserve formatting.
++        this.listener.sendSystemMessage(Component.literal(message)); // TintedPaper - native RCON messages already append a newline.
+     }
+ 
+     @Override
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineVanillaFixesTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineVanillaFixesTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..8986d088cd85042ce4ed241e00c8d9cf3c0d919e
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineVanillaFixesTest.java
+@@ -0,0 +1,100 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.net.InetSocketAddress;
++import java.util.UUID;
++import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
++import io.papermc.paper.configuration.WorldConfiguration;
++import net.minecraft.core.RegistryAccess;
++import net.minecraft.network.chat.Component;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.server.rcon.RconConsoleSource;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.projectile.throwableitemprojectile.Snowball;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.levelgen.material.MaterialRuleContext;
++import net.minecraft.world.level.levelgen.material.condition.SteepCondition;
++import org.bukkit.craftbukkit.CraftWorld;
++import org.bukkit.craftbukkit.command.CraftRemoteConsoleCommandSender;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.fixes.MCBugFix;
++import org.dreeam.leaf.config.modules.opt.DontSaveEntity;
++import org.junit.jupiter.api.Test;
++import org.purpurmc.purpur.PurpurWorldConfig;
++import org.spigotmc.SpigotWorldConfig;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DivineVanillaFixesTest {
++    @Test
++    void rconSeparatesNativeAndBukkitMessagesWithoutAddingBlankLines() {
++        RconConsoleSource source = new RconConsoleSource(mock(MinecraftServer.class), new InetSocketAddress("127.0.0.1", 25575));
++        source.sendSystemMessage(Component.literal("native"));
++        CraftRemoteConsoleCommandSender sender = new CraftRemoteConsoleCommandSender(source);
++        sender.sendMessage("plugin-a", "plugin-b");
++        assertEquals("native\nplugin-a\nplugin-b\n", source.getCommandResponse());
++        source.prepareForCommand();
++        assertEquals("", source.getCommandResponse());
++        sender.sendMessage("intentional\n");
++        assertEquals("intentional\n\n", source.getCommandResponse());
++    }
++
++    @Test
++    void optionalSteepnessRecognizesBothSignsAtTheThreshold() {
++        boolean previous = MCBugFix.mc258859;
++        try {
++            for (boolean enabled : new boolean[]{false, true}) {
++                MCBugFix.mc258859 = enabled;
++                for (int x : new int[]{Integer.MIN_VALUE, -4, -3, 0, 3, 4, Integer.MAX_VALUE}) {
++                    for (int z : new int[]{Integer.MIN_VALUE, -4, -3, 0, 3, 4, Integer.MAX_VALUE}) {
++                        MaterialRuleContext context = mock(MaterialRuleContext.class);
++                        when(context.surfaceGradientX()).thenReturn(x);
++                        when(context.surfaceGradientZ()).thenReturn(z);
++                        boolean expected = enabled ? x <= -4 || x >= 4 || z <= -4 || z >= 4 : x <= -4 || z >= 4;
++                        assertEquals(expected, SteepCondition.INSTANCE.compile(context).test(), x + "," + z + ":" + enabled);
++                    }
++                }
++            }
++        } finally {
++            MCBugFix.mc258859 = previous;
++        }
++    }
++
++    @Test
++    void snowballSavingRemainsOptInAndHonorsNativeRemovalRules() throws Exception {
++        boolean previous = DontSaveEntity.dontSaveSnowball;
++        try {
++            ServerLevel level = mock(ServerLevel.class);
++            var purpur = Level.class.getField("purpurConfig");
++            purpur.setAccessible(true);
++            purpur.set(level, mock(PurpurWorldConfig.class));
++            var spigot = Level.class.getField("spigotConfig");
++            spigot.setAccessible(true);
++            spigot.set(level, mock(SpigotWorldConfig.class));
++            WorldConfiguration config = mock(WorldConfiguration.class);
++            config.entities = mock(WorldConfiguration.Entities.class);
++            config.entities.spawning = mock(WorldConfiguration.Entities.Spawning.class);
++            config.entities.spawning.despawnTime = new Reference2ObjectOpenHashMap<>();
++            when(level.paperConfig()).thenReturn(config);
++            when(level.registryAccess()).thenReturn(RegistryAccess.EMPTY);
++            when(level.getNextEntityId()).thenReturn(1);
++            CraftWorld world = mock(CraftWorld.class);
++            when(world.getUID()).thenReturn(new UUID(1, 2));
++            when(level.getWorld()).thenReturn(world);
++            Snowball snowball = new Snowball(EntityTypes.SNOWBALL, level);
++            DontSaveEntity.dontSaveSnowball = false;
++            assertTrue(snowball.shouldBeSaved());
++            DontSaveEntity.dontSaveSnowball = true;
++            assertFalse(snowball.shouldBeSaved());
++            DontSaveEntity.dontSaveSnowball = false;
++            assertTrue(snowball.shouldBeSaved());
++            snowball.setRemoved(Entity.RemovalReason.KILLED, null);
++            assertFalse(snowball.shouldBeSaved());
++        } finally {
++            DontSaveEntity.dontSaveSnowball = previous;
++        }
++    }
++}

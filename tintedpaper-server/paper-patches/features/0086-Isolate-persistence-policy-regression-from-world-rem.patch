@@ -1,0 +1,22 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 20:09:18 -0300
+Subject: [PATCH] Isolate persistence policy regression from world removal
+ callbacks
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineVanillaFixesTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineVanillaFixesTest.java
+index 8986d088cd85042ce4ed241e00c8d9cf3c0d919e..a93372047afc2fbe4a1db0b830a0aca6de9d9c45 100644
+--- a/src/test/java/org/bukkit/craftbukkit/tinted/DivineVanillaFixesTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineVanillaFixesTest.java
+@@ -91,7 +91,9 @@ class DivineVanillaFixesTest {
+             assertFalse(snowball.shouldBeSaved());
+             DontSaveEntity.dontSaveSnowball = false;
+             assertTrue(snowball.shouldBeSaved());
+-            snowball.setRemoved(Entity.RemovalReason.KILLED, null);
++            var removal = Entity.class.getDeclaredField("removalReason");
++            removal.setAccessible(true);
++            removal.set(snowball, Entity.RemovalReason.KILLED);
+             assertFalse(snowball.shouldBeSaved());
+         } finally {
+             DontSaveEntity.dontSaveSnowball = previous;
