@@ -9,7 +9,7 @@ FastNoise was requested twice and is tracked once.
 | [BetterMaps](https://codeberg.org/NerjalNosk/bettermaps) | `a6e7fb7c5c31a1e54ec6ace339d4ca70c71f1488` | Opt-in deferred explorer-map integration implemented; five local regressions passed. Async/dynamic lookup and arbitrary request parameters remain pending. |
 | [Lomka](https://github.com/Starlevka/Lomka) | `5d8bf834d5d3efa783ecad0c3d2fb15a5634550f` | Bulk NBT array stream reads implemented; four local regression tests passed. Other server optimizations pending. |
 | [Worldthreader](https://github.com/2No2Name/worldthreader) | `6fbaef2f424d9a81c9d16617f58b58076c5d045c` | Existing parallel world ticking retained. A cache ownership race found during comparison is fixed and regression-tested; see PARALLEL-WORLD-PORT.md. Cross-world exclusivity and remaining compatibility mechanisms are pending. |
-| [UUID-Hex](https://github.com/CJDevZ/UUID-Hex) | `e538db835f6fc56809559be6f4d4c6b8bcee20e1` | Datapack function/storage API integration pending. |
+| [UUID-Hex](https://github.com/CJDevZ/UUID-Hex) | `e538db835f6fc56809559be6f4d4c6b8bcee20e1` | Original functions bundled as an optional built-in datapack; three local regressions passed. Live command/storage execution remains untested. |
 | [Explodee](https://github.com/KnownSH/Explodee) | `58b4387177d3c24b434285612b9a5042f81952ff` | Spherical ray distribution implemented inside Moonrise's loop, opt-in and default false. Two local regressions passed. |
 | [Potatoptimize](https://github.com/Tater-Certified/Potatoptimize) | `cc66d31103eba2e0e24d47a46d0bbc313e686b23` | Sign ticking/editor validation and Halloween caching already present. Christmas caching implemented with two local regressions. Slime, navigation, portals and stat policies remain pending. |
 | [Vertigo](https://github.com/Builderb0y/Vertigo) | `7a64414ab9b615f8aeea2d8ce29f2a9290f4cec8` | Negotiated client/server section protocol integration pending. |
@@ -43,6 +43,8 @@ retain the native path. Tests compare the source distribution, verify unit
 vectors and exercise the real native loop: radius four uses 100 rays when enabled
 and 1,352 when disabled. This is a work-count assertion, not a TPS benchmark.
 Actual destruction patterns, TNT chains and event-heavy gameplay remain untested.
+The ray count grows with radius squared and can exceed the native count for large
+explosions; this option is not a universal reduction in work.
 Original MIT-0 license: `licenses/Explodee-MIT-0.txt`.
 
 Christmas checks cache one immutable local-day result instead of creating a date
@@ -82,6 +84,23 @@ forged metadata bounds, Paper villager discovery/claim settings, and the native
 map-use path firing the fill event and honoring its replacement item. Event and
 map-storage adapters are isolated with mocks; live plugins and gameplay have not
 been tested.
+
+## UUID-Hex built-in datapack
+
+The original MIT-licensed functions and lookup table are available through
+`/datapack enable "tintedpaper_uuid_hex"`. The pack is disabled by default and
+does not identify itself to clients as known vanilla data. Enabling it loads the
+upstream `uuid` objective and storage table. Its entry points remain `uuid:_`
+and `uuid:convert`, input `uuid:in UUID`, and output `uuid:out plain`. It does not
+rewrite existing datapacks or replace Java UUID serialization. Avoid enabling
+another copy of the same namespace at the same time.
+
+The current singular `function` paths are bundled, without legacy duplicate
+directories. Tests verify pack discovery, compatibility, explicit activation,
+unchanged function checksums, native command/macro compilation, all 65,536 lookup
+entries and signed-word conversion against canonical UUIDs. These checks do not
+execute the functions against a running server's scoreboard and storage. The
+original license is included inside the built-in pack.
 
 ## Other integration constraints
 
