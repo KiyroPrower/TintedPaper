@@ -1,0 +1,170 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 12:44:15 -0300
+Subject: [PATCH] Cover stateful selector predicates and bounded NBT array
+ decoding
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/BulkNbtArrayReadTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/BulkNbtArrayReadTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..78b1eff22a9bffa60504c56b796b401ad1dc76c9
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/BulkNbtArrayReadTest.java
+@@ -0,0 +1,137 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.netty.buffer.ByteBufInputStream;
++import io.netty.buffer.Unpooled;
++import java.io.ByteArrayInputStream;
++import java.io.ByteArrayOutputStream;
++import java.io.DataInputStream;
++import java.io.DataOutputStream;
++import java.io.EOFException;
++import java.util.Arrays;
++import java.util.Random;
++import net.minecraft.nbt.IntArrayTag;
++import net.minecraft.nbt.LongArrayTag;
++import net.minecraft.nbt.NbtAccounter;
++import net.minecraft.nbt.NbtAccounterException;
++import net.minecraft.nbt.StreamTagVisitor;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class BulkNbtArrayReadTest {
++    private static byte[] payload(int[] ints, long[] longs) throws Exception {
++        var bytes = new ByteArrayOutputStream();
++        var output = new DataOutputStream(bytes);
++        new IntArrayTag(ints).write(output);
++        new LongArrayTag(longs).write(output);
++        output.writeInt(0x12345678);
++        return bytes.toByteArray();
++    }
++
++    @Test
++    void streamAndNetworkPathsPreserveValuesAndAccountingAtBufferBoundaries() throws Exception {
++        Random random = new Random(712938);
++        for (int length : new int[]{0, 1, 1023, 1024, 1025, 2047, 2048, 2049, 4097}) {
++            int[] ints = random.ints(length).toArray();
++            long[] longs = random.longs(length).toArray();
++            if (length != 0) {
++                ints[0] = Integer.MIN_VALUE;
++                longs[0] = Long.MIN_VALUE;
++                ints[length - 1] = Integer.MAX_VALUE;
++                longs[length - 1] = Long.MAX_VALUE;
++            }
++            byte[] bytes = payload(ints, longs);
++            var source = new CountingStream(bytes);
++            var input = new DataInputStream(source);
++            var budget = NbtAccounter.unlimitedHeap();
++            assertArrayEquals(ints, IntArrayTag.TYPE.load(input, budget).getAsIntArray());
++            assertArrayEquals(longs, LongArrayTag.TYPE.load(input, budget).getAsLongArray());
++            assertEquals(48L + 12L * length, budget.getUsage());
++            assertEquals(0x12345678, input.readInt());
++            assertEquals(0, input.available());
++            assertEquals((length + 2047) / 2048 + (length + 1023) / 1024, source.bulkReads);
++            assertTrue(source.largestRead <= 8192);
++            try (var network = new ByteBufInputStream(Unpooled.wrappedBuffer(bytes), true)) {
++                assertArrayEquals(ints, IntArrayTag.TYPE.load(network, NbtAccounter.unlimitedHeap()).getAsIntArray());
++                assertArrayEquals(longs, LongArrayTag.TYPE.load(network, NbtAccounter.unlimitedHeap()).getAsLongArray());
++                assertEquals(0x12345678, network.readInt());
++            }
++        }
++    }
++
++    @Test
++    void partialStreamReadsAndVisitorsReceiveTheCompleteArrays() throws Exception {
++        int[] ints = new Random(1).ints(4097).toArray();
++        long[] longs = new Random(2).longs(2049).toArray();
++        var source = new CountingStream(payload(ints, longs)) {
++            @Override
++            public synchronized int read(byte[] bytes, int offset, int length) {
++                return super.read(bytes, offset, Math.min(length, 7));
++            }
++        };
++        var input = new DataInputStream(source);
++        StreamTagVisitor visitor = mock(StreamTagVisitor.class);
++        when(visitor.visit(any(int[].class))).thenAnswer(call -> {
++            assertArrayEquals(ints, call.getArgument(0, int[].class));
++            return StreamTagVisitor.ValueResult.CONTINUE;
++        });
++        when(visitor.visit(any(long[].class))).thenAnswer(call -> {
++            assertArrayEquals(longs, call.getArgument(0, long[].class));
++            return StreamTagVisitor.ValueResult.HALT;
++        });
++        assertEquals(StreamTagVisitor.ValueResult.CONTINUE, IntArrayTag.TYPE.parse(input, visitor, NbtAccounter.unlimitedHeap()));
++        assertEquals(StreamTagVisitor.ValueResult.HALT, LongArrayTag.TYPE.parse(input, visitor, NbtAccounter.unlimitedHeap()));
++        verify(visitor).visit(any(int[].class));
++        verify(visitor).visit(any(long[].class));
++        assertEquals(0x12345678, input.readInt());
++    }
++
++    @Test
++    void invalidLengthsAndBudgetsFailBeforeReadingArrayPayloads() throws Exception {
++        for (int length : new int[]{-1, 1 << 24}) {
++            byte[] header = java.nio.ByteBuffer.allocate(4).putInt(length).array();
++            assertThrows(IllegalArgumentException.class, () -> IntArrayTag.TYPE.load(new DataInputStream(new ByteArrayInputStream(header)), NbtAccounter.unlimitedHeap()));
++            assertThrows(IllegalArgumentException.class, () -> LongArrayTag.TYPE.load(new DataInputStream(new ByteArrayInputStream(header)), NbtAccounter.unlimitedHeap()));
++        }
++        byte[] header = java.nio.ByteBuffer.allocate(4).putInt(10).array();
++        var source = new CountingStream(header);
++        final var intSource = source;
++        assertThrows(NbtAccounterException.class, () -> IntArrayTag.TYPE.load(new DataInputStream(intSource), NbtAccounter.create(63)));
++        assertEquals(0, source.bulkReads);
++        source = new CountingStream(header);
++        final var longSource = source;
++        assertThrows(NbtAccounterException.class, () -> LongArrayTag.TYPE.load(new DataInputStream(longSource), NbtAccounter.create(103)));
++        assertEquals(0, source.bulkReads);
++    }
++
++    @Test
++    void truncatedPayloadsStillThrowEof() throws Exception {
++        var ints = new ByteArrayOutputStream();
++        new IntArrayTag(new int[4097]).write(new DataOutputStream(ints));
++        byte[] intBytes = Arrays.copyOf(ints.toByteArray(), ints.size() - 1);
++        assertThrows(EOFException.class, () -> IntArrayTag.TYPE.load(new DataInputStream(new ByteArrayInputStream(intBytes)), NbtAccounter.unlimitedHeap()));
++        var longs = new ByteArrayOutputStream();
++        new LongArrayTag(new long[2049]).write(new DataOutputStream(longs));
++        byte[] longBytes = Arrays.copyOf(longs.toByteArray(), longs.size() - 1);
++        assertThrows(EOFException.class, () -> LongArrayTag.TYPE.load(new DataInputStream(new ByteArrayInputStream(longBytes)), NbtAccounter.unlimitedHeap()));
++    }
++
++    private static class CountingStream extends ByteArrayInputStream {
++        int bulkReads;
++        int largestRead;
++
++        CountingStream(byte[] bytes) {
++            super(bytes);
++        }
++
++        @Override
++        public synchronized int read(byte[] bytes, int offset, int length) {
++            this.bulkReads++;
++            this.largestRead = Math.max(this.largestRead, length);
++            return super.read(bytes, offset, length);
++        }
++    }
++}
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
+index 9cc6395e18be1e9accb282522b0a63010fa0ae67..562509bb1f39eca38980fdf4c14247a2cc492308 100644
+--- a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
+@@ -27,6 +27,15 @@ import static org.mockito.Mockito.*;
+ class DatapackTagIndexTest {
+     private static final EntityTypeTest<Entity, Entity> ANY = EntityTypeTest.forClass(Entity.class);
+ 
++    @Test
++    void lootPredicatesRetainNativeScanOrderRegardlessOfOptionOrder() throws Exception {
++        net.minecraft.commands.arguments.selector.options.EntitySelectorOptions.bootStrap();
++        for (String selector : List.of("@e[predicate=tinted:test,tag=boss]", "@e[tag=boss,predicate=!tinted:test]")) {
++            assertNull(new net.minecraft.commands.arguments.selector.EntitySelectorParser(new com.mojang.brigadier.StringReader(selector), true).parse().tintedPositiveTags);
++        }
++        assertEquals(List.of("boss"), new net.minecraft.commands.arguments.selector.EntitySelectorParser(new com.mojang.brigadier.StringReader("@e[tag=boss]"), true).parse().tintedPositiveTags);
++    }
++
+     private static ServerLevel level() throws Exception {
+         ServerLevel level = mock(ServerLevel.class);
+         var purpurConfig = Level.class.getField("purpurConfig");

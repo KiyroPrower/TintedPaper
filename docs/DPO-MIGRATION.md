@@ -11,10 +11,10 @@ This is an incomplete migration, not a replacement release for DPO.
 
 | Active injections | Decision |
 | --- | --- |
-| 19 | Native behaviour implemented and local regression suite passed |
+| 22 | Native behaviour implemented and local regression suite passed |
 | 36 | Equivalent mechanism verified in the pinned TintedPaper/Paper baseline |
 | 6 | Removed 26.2 noise pipeline or DivineMC-only implementation |
-| 396 | Native target found; semantic comparison still pending |
+| 393 | Native target found; semantic comparison still pending |
 | 1 | External target still needs source resolution |
 
 The source manifests contain 458 active injections. Matching a target file is
@@ -37,6 +37,12 @@ decision entries fail rather than disappearing from the inventory.
 
 ## Implemented native batch
 
+- Tagged entity selectors use a per-level index maintained through tracking lifecycle
+  and every mutation of the live Bukkit tag set. Limited/ordered queries use the
+  index only for zero or one candidate, falling back before evaluating predicates
+  otherwise. The index remains current when its query toggle is disabled.
+  Selectors with `predicate=` retain the native scan, since loot predicates can
+  consume random state even for entities that do not have the requested tag.
 - Team saves omit invalid null members while retaining valid members and leaving
   the live team untouched. Normal saves still use the native fast path.
 - Tracked scoreboard holders are collected without relying on the fastutil size
@@ -105,6 +111,7 @@ tintedpaper:
     nbt-named-read-plan: true
     zip-pack-index: true
     selector-alive-check-last: true
+    selector-tag-index: true
   network:
     unknown-tag-holder-sets: true
   fixes:

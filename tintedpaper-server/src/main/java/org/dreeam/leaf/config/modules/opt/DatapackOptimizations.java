@@ -9,6 +9,7 @@ public final class DatapackOptimizations extends ConfigModule {
     public static volatile boolean zipPackIndex = true;
     public static volatile boolean unknownTagHolderSets = true;
     public static volatile boolean selectorAliveCheckLast = true;
+    public static volatile boolean selectorTagIndex = true;
     public static volatile boolean scoreboardTeamNullMember = true;
     public static volatile boolean scoreboardTrackedPlayersRace = true;
     public static volatile boolean movingBlocksDestroyPath = true;
@@ -33,6 +34,8 @@ public final class DatapackOptimizations extends ConfigModule {
             "Encode undefined named holder sets directly instead of sending unknown tag names to clients.");
         selectorAliveCheckLast = globalConfig.getBoolean("tintedpaper.datapacks.selector-alive-check-last", true,
             "Evaluate selector option predicates before the implicit alive check.");
+        selectorTagIndex = globalConfig.getBoolean("tintedpaper.datapacks.selector-tag-index", true,
+            "Serve @e[tag=...] selectors without a distance or box from a per-level index of tagged entities instead of scanning every entity. Every candidate is still checked by the full selector.");
         scoreboardTeamNullMember = globalConfig.getBoolean("tintedpaper.fixes.scoreboard-team-null-member", true,
             "Omit invalid null team members when saving the scoreboard.");
         scoreboardTrackedPlayersRace = globalConfig.getBoolean("tintedpaper.fixes.scoreboard-tracked-players-race", true,
