@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sat, 14 Nov 2026 07:27:20 -0300
+Subject: [PATCH] Port configurable spawn detection with consistent radius and
+ bounded iteration
+
+
+diff --git a/ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java b/ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java
+index 82b3a42b2d7d9d027596b00af328e060843c87c9..251321a20cbee3fb8f72f1f9422ad2518419486b 100644
+--- a/ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java
++++ b/ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java
+@@ -6,7 +6,6 @@ import ca.spottedleaf.moonrise.common.util.CoordinateUtils;
+ import ca.spottedleaf.moonrise.common.util.MoonriseConstants;
+ import ca.spottedleaf.moonrise.patches.chunk_system.level.ChunkSystemLevel;
+ import ca.spottedleaf.moonrise.patches.chunk_system.level.chunk.ChunkData;
+-import ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickConstants;
+ import ca.spottedleaf.moonrise.patches.chunk_tick_iteration.ChunkTickServerLevel;
+ import it.unimi.dsi.fastutil.longs.Long2ReferenceOpenHashMap;
+ import it.unimi.dsi.fastutil.objects.Reference2ReferenceOpenHashMap;
+@@ -123,7 +122,7 @@ public final class NearbyPlayers {
+         players[NearbyMapType.GENERAL_REALLY_SMALL.ordinal()].update(chunk.x(), chunk.z(), GENERAL_REALLY_SMALL_VIEW_DISTANCE);
+         players[NearbyMapType.TICK_VIEW_DISTANCE.ordinal()].update(chunk.x(), chunk.z(), PlatformHooks.get().getTickViewDistance(player));
+         players[NearbyMapType.VIEW_DISTANCE.ordinal()].update(chunk.x(), chunk.z(), PlatformHooks.get().getViewDistance(player));
+-        players[NearbyMapType.SPAWN_RANGE.ordinal()].update(chunk.x(), chunk.z(), ChunkTickConstants.PLAYER_SPAWN_TRACK_RANGE); // Moonrise - chunk tick iteration
++        players[NearbyMapType.SPAWN_RANGE.ordinal()].update(chunk.x(), chunk.z(), org.dreeam.leaf.config.modules.opt.SpawnTrackingRange.chunks()); // Moonrise - chunk tick iteration // TintedPaper - configurable detection radius without class-initialization capture
+     }
+ 
+     public TrackedChunk getChunk(final ChunkPos pos) {
+diff --git a/net/minecraft/server/level/ChunkMap.java b/net/minecraft/server/level/ChunkMap.java
+index 0a0dad530483297ef6313cad73b41e317aff5b3d..698cdbf8c326e0efe18a9eb273ce702037cb3574 100644
+--- a/net/minecraft/server/level/ChunkMap.java
++++ b/net/minecraft/server/level/ChunkMap.java
+@@ -728,7 +728,7 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+             if (event == null || event.isCancelled()) {
+                 continue;
+             }
+-            double blockRange = (double) ((event.getSpawnRadius() << 4) * (event.getSpawnRadius() << 4));
++            double blockRange = org.dreeam.leaf.config.modules.opt.SpawnTrackingRange.capSquared((double) ((event.getSpawnRadius() << 4) * (event.getSpawnRadius() << 4))); // TintedPaper - retain Paper event bounds
+             if (chunkMap.playerIsCloseEnoughForSpawning(raw[i], chunkPos, blockRange)) {
+                 // Paper end - PlayerNaturallySpawnCreaturesEvent
+                 return true;
+@@ -828,10 +828,10 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+                 final com.destroystokyo.paper.event.entity.PlayerNaturallySpawnCreaturesEvent event = player.playerNaturallySpawnedEvent;
+                 if (event == null || event.isCancelled()) continue;
+                 final int spawnRadius = event.getSpawnRadius();
+-                blockRangeSquared = (double) (spawnRadius * spawnRadius) * 256.0; // (radius << 4)^2
++                blockRangeSquared = org.dreeam.leaf.config.modules.opt.SpawnTrackingRange.capSquared((double) (spawnRadius * spawnRadius) * 256.0); // TintedPaper - retain Paper event bounds
+                 // Paper end - PlayerNaturallySpawnCreaturesEvent
+             } else {
+-                blockRangeSquared = 16384.0; // Default 128^2
++                blockRangeSquared = org.dreeam.leaf.config.modules.opt.SpawnTrackingRange.squared(); // TintedPaper - configurable player detection
+             }
+             // Calculate squared distance using precomputed center
+             final double dx = player.getX() - centerX;
+@@ -863,7 +863,7 @@ public class ChunkMap extends SimpleRegionStorage implements ChunkHolder.PlayerP
+         Objects.checkFromIndexSize(0, len, raw.length);
+         for (int i = 0; i < len; ++i) {
+             final ServerPlayer player = raw[i];
+-            if (this.playerIsCloseEnoughForSpawning(player, pos, 16384.0D)) { // Spigot
++            if (this.playerIsCloseEnoughForSpawning(player, pos, org.dreeam.leaf.config.modules.opt.SpawnTrackingRange.squared())) { // Spigot // TintedPaper - multiply, never XOR; retain the logical list bound
+                 if (ret == null) {
+                     ret = new ArrayList<>(len - i);
+                     ret.add(player);

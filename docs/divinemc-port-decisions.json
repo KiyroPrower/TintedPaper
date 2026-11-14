@@ -291,6 +291,14 @@
       "status": "covered-by-base",
       "reason": "The inherited per-world SpawningThrottle configuration already exposes the same disabled-by-default threshold and category-specific throttled intervals. Keep the current configuration and native implementation together rather than register a second copy.",
       "evidence": ["tintedpaper-server/paper-patches/features/0047-Paper-PR-Throttle-failed-spawn-attempts.patch", "paper-server/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0057-Configurable-player-spawn-tracking-range.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Configure the SPAWN_RANGE tracking map and circular detection/mob-cap queries together, retaining the source default of 128 blocks. Multiply in double precision instead of copying the source's XOR expression, and preserve logical list lengths and existing tracker contracts instead of scanning backing-array capacity. Read the current setting at the normal owner-thread tracking update rather than capture it in a static constant before configuration loads. Clamp to 0-1024, support zero without class-initialization failure and preserve existing public Moonrise constants. Custom radii remain bounded by Paper spawn events; the default preserves plugin-expanded event radii exactly. Reloaded map coverage changes at the next normal player tracking update, not atomically across all worlds.",
+      "config": ["performance.chunks.player-near-chunk-detection-range"],
+      "evidence": ["tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/opt/SpawnTrackingRange.java", "tintedpaper-server/src/minecraft/java/ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java", "tintedpaper-server/src/minecraft/java/net/minecraft/server/level/ChunkMap.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineSpawnTrackingTest.java"],
+      "validation": "AllFeatures suite passed, including four regressions for live configuration/clamping and default values, tracking-square coverage for every integer radius 0-1024, actual circular queries with strict boundaries/spectators/stale backing slots, and Paper event bounds/cancellation/plugin-expanded default radii. No gameplay, live reload under parallel-world load or benchmark validation."
     }
   ],
   "compatibilityFixes": [

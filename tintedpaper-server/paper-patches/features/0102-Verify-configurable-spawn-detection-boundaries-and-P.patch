@@ -1,0 +1,159 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 07:27:21 -0300
+Subject: [PATCH] Verify configurable spawn detection boundaries and Paper
+ event compatibility
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineSpawnTrackingTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineSpawnTrackingTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..869c74c0afe3c16ffe99beca95ea01493e2f4a51
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineSpawnTrackingTest.java
+@@ -0,0 +1,146 @@
++package org.bukkit.craftbukkit.tinted;
++
++import ca.spottedleaf.moonrise.common.list.ReferenceList;
++import ca.spottedleaf.moonrise.common.misc.NearbyPlayers;
++import com.destroystokyo.paper.event.entity.PlayerNaturallySpawnCreaturesEvent;
++import java.lang.reflect.Field;
++import java.lang.reflect.Method;
++import java.util.List;
++import net.minecraft.server.level.ChunkMap;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.phys.Vec3;
++import org.bukkit.entity.Player;
++import org.bukkit.support.environment.AllFeatures;
++import org.dreeam.leaf.config.LeafConfig;
++import org.dreeam.leaf.config.LeafGlobalConfig;
++import org.dreeam.leaf.config.modules.opt.SpawnTrackingRange;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.ArgumentMatchers.*;
++import static org.mockito.Mockito.*;
++
++@AllFeatures
++class DivineSpawnTrackingTest {
++    private final int oldRange = SpawnTrackingRange.blocks;
++
++    @AfterEach
++    void restoreConfig() {
++        SpawnTrackingRange.blocks = this.oldRange;
++    }
++
++    @Test
++    void configurationClampsWithoutCapturingAnEarlyClassInitializationValue() {
++        LeafGlobalConfig config = mock(LeafGlobalConfig.class);
++        when(config.getInt(anyString(), anyInt(), anyString())).thenReturn(-1, Integer.MAX_VALUE, 128, 0);
++        try (var leaf = mockStatic(LeafConfig.class)) {
++            leaf.when(LeafConfig::globalConfig).thenReturn(config);
++            var module = new SpawnTrackingRange();
++            module.onLoaded();
++            assertEquals(0, SpawnTrackingRange.blocks);
++            assertEquals(0, SpawnTrackingRange.chunks());
++            module.onLoaded();
++            assertEquals(1024, SpawnTrackingRange.blocks);
++            assertEquals(64, SpawnTrackingRange.chunks());
++            assertEquals(1048576.0, SpawnTrackingRange.squared());
++            module.onLoaded();
++            assertEquals(8, SpawnTrackingRange.chunks());
++            assertEquals(16384.0, SpawnTrackingRange.squared());
++            assertEquals(65536.0, SpawnTrackingRange.capSquared(65536.0));
++            module.onLoaded();
++            assertEquals(0.0, SpawnTrackingRange.squared());
++        }
++    }
++
++    @Test
++    void roundedTrackingSquareContainsEveryPotentialCircleCandidate() {
++        double[] playerOffsets = {0.0, 0.00001, 7.99999, 8.0, 8.00001, 15.99999};
++        for (int range = 0; range <= 1024; range++) {
++            SpawnTrackingRange.blocks = range;
++            int tracked = SpawnTrackingRange.chunks();
++            for (double playerOffset : playerOffsets) {
++                for (int chunk = -tracked - 2; chunk <= tracked + 2; chunk++) {
++                    double distance = Math.abs(chunk * 16.0 + 8.0 - playerOffset);
++                    if (distance < range) {
++                        assertTrue(Math.abs(chunk) <= tracked, "missing candidate at radius " + range);
++                    }
++                }
++            }
++        }
++    }
++
++    @Test
++    void actualDetectionUsesSquaredRadiusStrictBoundaryAndLogicalListSize() throws Exception {
++        SpawnTrackingRange.blocks = 128;
++        ServerPlayer inside = this.playerAt(127.0);
++        ServerPlayer edge = this.playerAt(128.0);
++        ServerPlayer outside = this.playerAt(129.0);
++        ServerPlayer spectator = this.playerAt(0.0);
++        when(spectator.isSpectator()).thenReturn(true);
++        ServerPlayer stale = mock(ServerPlayer.class);
++        var map = this.map(new ServerPlayer[] {inside, edge, outside, spectator, stale}, 4);
++        assertEquals(List.of(inside), map.getPlayersCloseForSpawning(new ChunkPos(0, 0)));
++        assertTrue(map.anyPlayerCloseEnoughForSpawning(new ChunkPos(0, 0)));
++        verifyNoInteractions(stale);
++        SpawnTrackingRange.blocks = 0;
++        assertTrue(map.getPlayersCloseForSpawning(new ChunkPos(0, 0)).isEmpty());
++        assertFalse(map.anyPlayerCloseEnoughForSpawning(new ChunkPos(0, 0)));
++        verifyNoInteractions(stale);
++    }
++
++    @Test
++    void reducedDetectionRetainsPaperEventRadiusAndCancellation() throws Exception {
++        SpawnTrackingRange.blocks = 128;
++        ServerPlayer player = this.playerAt(40.0);
++        player.playerNaturallySpawnedEvent = new PlayerNaturallySpawnCreaturesEvent(mock(Player.class), (byte) 2);
++        var map = this.map(new ServerPlayer[] {player}, 1);
++        Method reduced = ChunkMap.class.getDeclaredMethod("anyPlayerCloseEnoughForSpawning", ChunkPos.class, boolean.class);
++        reduced.setAccessible(true);
++        assertFalse((boolean) reduced.invoke(map, new ChunkPos(0, 0), true));
++        player.playerNaturallySpawnedEvent.setSpawnRadius((byte) 8);
++        assertTrue((boolean) reduced.invoke(map, new ChunkPos(0, 0), true));
++        SpawnTrackingRange.blocks = 32;
++        assertFalse((boolean) reduced.invoke(map, new ChunkPos(0, 0), true));
++        SpawnTrackingRange.blocks = 128;
++        player.playerNaturallySpawnedEvent.setCancelled(true);
++        assertFalse((boolean) reduced.invoke(map, new ChunkPos(0, 0), true));
++        player.playerNaturallySpawnedEvent = null;
++        assertFalse((boolean) reduced.invoke(map, new ChunkPos(0, 0), true));
++
++        ServerPlayer diagonal = this.playerAt(120.0);
++        when(diagonal.position()).thenReturn(new Vec3(128.0, 64.0, 128.0));
++        when(diagonal.getZ()).thenReturn(128.0);
++        diagonal.playerNaturallySpawnedEvent = new PlayerNaturallySpawnCreaturesEvent(mock(Player.class), (byte) 16);
++        var diagonalMap = this.map(new ServerPlayer[] {diagonal}, 1);
++        assertTrue((boolean) reduced.invoke(diagonalMap, new ChunkPos(0, 0), true));
++        SpawnTrackingRange.blocks = 64;
++        assertFalse((boolean) reduced.invoke(diagonalMap, new ChunkPos(0, 0), true));
++    }
++
++    private ServerPlayer playerAt(double distance) {
++        ServerPlayer player = mock(ServerPlayer.class);
++        when(player.position()).thenReturn(new Vec3(8.0 + distance, 64.0, 8.0));
++        when(player.getX()).thenReturn(8.0 + distance);
++        when(player.getZ()).thenReturn(8.0);
++        return player;
++    }
++
++    @SuppressWarnings("unchecked")
++    private ChunkMap map(ServerPlayer[] backing, int size) throws Exception {
++        ReferenceList<ServerPlayer> list = mock(ReferenceList.class);
++        when(list.getRawDataUnchecked()).thenReturn(backing);
++        when(list.size()).thenReturn(size);
++        NearbyPlayers nearby = mock(NearbyPlayers.class);
++        when(nearby.getPlayers(any(ChunkPos.class), eq(NearbyPlayers.NearbyMapType.SPAWN_RANGE))).thenReturn(list);
++        ServerLevel world = mock(ServerLevel.class);
++        when(world.moonrise$getNearbyPlayers()).thenReturn(nearby);
++        ChunkMap map = mock(ChunkMap.class, CALLS_REAL_METHODS);
++        Field level = ChunkMap.class.getDeclaredField("level");
++        level.setAccessible(true);
++        level.set(map, world);
++        return map;
++    }
++}
