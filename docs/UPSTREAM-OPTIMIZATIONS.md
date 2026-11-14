@@ -11,7 +11,7 @@ FastNoise was requested twice and is tracked once.
 | [Worldthreader](https://github.com/2No2Name/worldthreader) | `6fbaef2f424d9a81c9d16617f58b58076c5d045c` | Existing parallel world ticking retained. A cache ownership race found during comparison is fixed and regression-tested; see PARALLEL-WORLD-PORT.md. Cross-world exclusivity and remaining compatibility mechanisms are pending. |
 | [UUID-Hex](https://github.com/CJDevZ/UUID-Hex) | `e538db835f6fc56809559be6f4d4c6b8bcee20e1` | Original functions bundled as an optional built-in datapack; three local regressions passed. Live command/storage execution remains untested. |
 | [Explodee](https://github.com/KnownSH/Explodee) | `58b4387177d3c24b434285612b9a5042f81952ff` | Spherical ray distribution implemented inside Moonrise's loop, opt-in and default false. Two local regressions passed. |
-| [Potatoptimize](https://github.com/Tater-Certified/Potatoptimize) | `cc66d31103eba2e0e24d47a46d0bbc313e686b23` | Sign ticking/editor validation and Halloween caching already present. Christmas caching implemented with two local regressions. Slime, navigation, portals and stat policies remain pending. |
+| [Potatoptimize](https://github.com/Tater-Certified/Potatoptimize) | `cc66d31103eba2e0e24d47a46d0bbc313e686b23` | Complete. Sign ticking/editor validation and Halloween caching already present; Christmas caching, slime chunk cache (exact), ridden-mob navigation skip and portal collision-search skip (both opt-in) implemented. Stat batching is already native through Gale's interval statistics. |
 | [Vertigo](https://github.com/Builderb0y/Vertigo) | `7a64414ab9b615f8aeea2d8ce29f2a9290f4cec8` | Negotiated client/server section protocol integration pending. |
 | [FastNoise](https://codeberg.org/ZenXArch/FastNoise) | `8e88157ca6366d15f406bc9bab27ef23654f664d` | Fixed-biome filling and End chunk-center result reuse adapted to native palettes/cache. Noise filling, surface and material compiler remain pending. |
 
@@ -175,3 +175,20 @@ material-compiler and negotiated section-protocol work is not included.
   while adapting its actual algorithms.
 
 All contributions retain the original authorship and applicable licenses.
+
+## Potatoptimize remaining policies
+
+`performance.potatoptimize.slime-chunk-cache` (default true) stores the vanilla
+slime chunk roll in the chunk; the key, seeds and the order of random draws in
+`Slime.checkSlimeSpawnRules` are unchanged, so results are identical (a test
+compares every chunk of a 40x40 area). Secure Seed keeps its own cache and
+`allChunksAreSlimeChunks` is still read first. Potatoptimize's own mixin
+reordered the random draw and bypassed the Paper height options; this port does
+neither.
+
+`skip-ridden-navigation` and `skip-portal-collision-search` default to false
+because they change behavior: a mob riding a non-living vehicle no longer
+advances its path state, and entities leaving a portal are not moved out of
+blocks. Potatoptimize's `PlayerEntityStatsMixin` is not ported: Gale's interval
+statistics already batch time-based stats in the native source.
+MIT license: Potatoptimize, Tater-Certified.

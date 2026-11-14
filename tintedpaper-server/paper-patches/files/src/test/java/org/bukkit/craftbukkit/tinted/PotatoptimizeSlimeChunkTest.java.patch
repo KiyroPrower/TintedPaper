@@ -1,0 +1,34 @@
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/PotatoptimizeSlimeChunkTest.java
+@@ -1,0 +_,31 @@
++package org.bukkit.craftbukkit.tinted;
++
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.chunk.ChunkAccess;
++import net.minecraft.world.level.levelgen.WorldgenRandom;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class PotatoptimizeSlimeChunkTest {
++    @Test
++    void cachedRollMatchesTheVanillaRollForEveryChunk() throws Exception {
++        var field = ChunkAccess.class.getDeclaredField("chunkPos");
++        field.setAccessible(true);
++        int slime = 0;
++        for (int x = -20; x < 20; x++) {
++            for (int z = -20; z < 20; z++) {
++                ChunkAccess chunk = mock(ChunkAccess.class, CALLS_REAL_METHODS);
++                field.set(chunk, new ChunkPos(x, z));
++                boolean expected = WorldgenRandom.seedSlimeChunk(x, z, 1234L, 987234911L).nextInt(10) == 0;
++                assertEquals(expected, chunk.tintedIsSlimeChunk(1234L, 987234911L));
++                assertEquals(expected, chunk.tintedIsSlimeChunk(1234L, 987234911L), "second call reads the cache");
++                if (expected) slime++;
++            }
++        }
++        assertTrue(slime > 0 && slime < 1600);
++    }
++}
