@@ -1,0 +1,193 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 14:04:12 -0300
+Subject: [PATCH] Verify predicate lookup publication reload and live entity
+ contexts
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/SelectorPredicateLookupTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/SelectorPredicateLookupTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..cbf23320897568abf40bc8ca264a916676579b05
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/SelectorPredicateLookupTest.java
+@@ -0,0 +1,180 @@
++package org.bukkit.craftbukkit.tinted;
++
++import com.mojang.brigadier.StringReader;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Optional;
++import java.util.concurrent.CyclicBarrier;
++import java.util.concurrent.Executors;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicReference;
++import java.util.function.Predicate;
++import net.minecraft.commands.arguments.selector.EntitySelector;
++import net.minecraft.commands.arguments.selector.EntitySelectorParser;
++import net.minecraft.commands.arguments.selector.options.EntitySelectorOptions;
++import net.minecraft.core.Holder;
++import net.minecraft.core.HolderLookup;
++import net.minecraft.core.registries.Registries;
++import net.minecraft.resources.Identifier;
++import net.minecraft.resources.ResourceKey;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.ReloadableServerRegistries;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.util.RandomSource;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.level.storage.loot.LootContext;
++import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
++import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
++import net.minecraft.world.phys.Vec3;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.opt.DatapackOptimizations;
++import org.dreeam.leaf.util.selector.SelectorPredicateLookup;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class SelectorPredicateLookupTest {
++    private static final ResourceKey<LootItemCondition> KEY = ResourceKey.create(Registries.PREDICATE, Identifier.fromNamespaceAndPath("tinted", "test"));
++    private boolean previous;
++
++    @BeforeEach
++    void enable() {
++        this.previous = DatapackOptimizations.selectorPredicateLookup;
++        DatapackOptimizations.selectorPredicateLookup = true;
++    }
++
++    @AfterEach
++    void restore() {
++        DatapackOptimizations.selectorPredicateLookup = this.previous;
++    }
++
++    @Test
++    @SuppressWarnings("unchecked")
++    void cachesHoldersAndMissingResultsByProviderButKeepsHolderValuesLive() {
++        HolderLookup.Provider first = mock(HolderLookup.Provider.class);
++        HolderLookup.Provider next = mock(HolderLookup.Provider.class);
++        Holder.Reference<LootItemCondition> holder = mock(Holder.Reference.class);
++        AtomicReference<LootItemCondition> value = new AtomicReference<>(mock(LootItemCondition.class));
++        when(holder.value()).thenAnswer(call -> value.get());
++        Optional<Holder.Reference<LootItemCondition>> found = Optional.of(holder);
++        when(first.get(KEY)).thenReturn(found);
++        when(next.get(KEY)).thenReturn(Optional.empty());
++        var lookup = new SelectorPredicateLookup(KEY);
++        assertSame(found, lookup.get(first));
++        assertSame(found, lookup.get(first));
++        value.set(mock(LootItemCondition.class));
++        assertSame(value.get(), lookup.get(first).orElseThrow().value());
++        verify(first, times(1)).get(KEY);
++        assertTrue(lookup.get(next).isEmpty());
++        assertTrue(lookup.get(next).isEmpty());
++        verify(next, times(1)).get(KEY);
++        DatapackOptimizations.selectorPredicateLookup = false;
++        assertSame(found, lookup.get(first));
++        assertSame(found, lookup.get(first));
++        verify(first, times(3)).get(KEY);
++        DatapackOptimizations.selectorPredicateLookup = true;
++        assertSame(found, lookup.get(first));
++        verify(first, times(4)).get(KEY);
++    }
++
++    @Test
++    void failedLookupsPropagateAndAreNotPublished() {
++        HolderLookup.Provider provider = mock(HolderLookup.Provider.class);
++        when(provider.get(KEY)).thenThrow(new IllegalStateException("lookup failed")).thenReturn(Optional.empty());
++        var lookup = new SelectorPredicateLookup(KEY);
++        assertEquals("lookup failed", assertThrows(IllegalStateException.class, () -> lookup.get(provider)).getMessage());
++        assertTrue(lookup.get(provider).isEmpty());
++        assertTrue(lookup.get(provider).isEmpty());
++        verify(provider, times(2)).get(KEY);
++    }
++
++    @Test
++    @SuppressWarnings("unchecked")
++    void concurrentProvidersNeverPairAnotherGenerationsValue() throws Exception {
++        HolderLookup.Provider first = mock(HolderLookup.Provider.class);
++        HolderLookup.Provider next = mock(HolderLookup.Provider.class);
++        Optional<Holder.Reference<LootItemCondition>> found = Optional.of(mock(Holder.Reference.class));
++        when(first.get(KEY)).thenReturn(found);
++        when(next.get(KEY)).thenReturn(Optional.empty());
++        var lookup = new SelectorPredicateLookup(KEY);
++        CyclicBarrier barrier = new CyclicBarrier(2);
++        try (var workers = Executors.newFixedThreadPool(2)) {
++            var a = workers.submit(() -> {
++                for (int i = 0; i < 100; i++) {
++                    barrier.await(5, TimeUnit.SECONDS);
++                    assertSame(found, lookup.get(first));
++                }
++                return null;
++            });
++            var b = workers.submit(() -> {
++                for (int i = 0; i < 100; i++) {
++                    barrier.await(5, TimeUnit.SECONDS);
++                    assertTrue(lookup.get(next).isEmpty());
++                }
++                return null;
++            });
++            a.get(10, TimeUnit.SECONDS);
++            b.get(10, TimeUnit.SECONDS);
++        }
++    }
++
++    @Test
++    @SuppressWarnings("unchecked")
++    void parsedSelectorsKeepFreshEntityContextsRandomAndReloadResults() throws Exception {
++        EntitySelectorOptions.bootStrap();
++        var selector = new EntitySelectorParser(new StringReader("@e[predicate=tinted:test]"), true).parse();
++        var field = EntitySelector.class.getDeclaredField("contextFreePredicates");
++        field.setAccessible(true);
++        List<Predicate<Entity>> options = (List<Predicate<Entity>>) field.get(selector);
++        Predicate<Entity> test = candidate -> options.stream().allMatch(option -> option.test(candidate));
++        HolderLookup.Provider provider = mock(HolderLookup.Provider.class);
++        Holder.Reference<LootItemCondition> holder = mock(Holder.Reference.class);
++        LootItemCondition condition = mock(LootItemCondition.class);
++        when(holder.value()).thenReturn(condition);
++        when(provider.get(KEY)).thenReturn(Optional.of(holder));
++        MinecraftServer server = mock(MinecraftServer.class);
++        when(server.reloadableRegistries()).thenReturn(new ReloadableServerRegistries.Holder(provider));
++        ServerLevel level = mock(ServerLevel.class);
++        when(level.getServer()).thenReturn(server);
++        RandomSource random = mock(RandomSource.class);
++        when(level.getRandom()).thenReturn(random);
++        Entity entity = mock(Entity.class);
++        when(entity.isAlive()).thenReturn(true);
++        when(entity.level()).thenReturn(level);
++        Vec3 a = new Vec3(1, 2, 3);
++        Vec3 b = new Vec3(4, 5, 6);
++        when(entity.position()).thenReturn(a, b);
++        List<LootContext> contexts = new ArrayList<>();
++        when(condition.test(any())).thenAnswer(call -> {
++            LootContext context = call.getArgument(0);
++            assertSame(entity, context.getOptional(LootContextParams.THIS_ENTITY));
++            assertTrue(context.hasVisitedElement(LootContext.createVisitedEntry(condition)));
++            context.getRandom().nextInt(1000);
++            contexts.add(context);
++            return true;
++        });
++        assertTrue(test.test(entity));
++        assertTrue(test.test(entity));
++        assertNotSame(contexts.get(0), contexts.get(1));
++        assertEquals(a, contexts.get(0).getOptional(LootContextParams.ORIGIN));
++        assertEquals(b, contexts.get(1).getOptional(LootContextParams.ORIGIN));
++        verify(provider, times(1)).get(KEY);
++        verify(random, times(2)).nextInt(1000);
++        var inverted = new EntitySelectorParser(new StringReader("@e[predicate=!tinted:test]"), true).parse();
++        List<Predicate<Entity>> invertedOptions = (List<Predicate<Entity>>) field.get(inverted);
++        Predicate<Entity> inverse = candidate -> invertedOptions.stream().allMatch(option -> option.test(candidate));
++        assertFalse(inverse.test(entity));
++        verify(random, times(3)).nextInt(1000);
++        HolderLookup.Provider reloaded = mock(HolderLookup.Provider.class);
++        when(reloaded.get(KEY)).thenReturn(Optional.empty());
++        when(server.reloadableRegistries()).thenReturn(new ReloadableServerRegistries.Holder(reloaded));
++        assertFalse(test.test(entity));
++        assertFalse(inverse.test(entity));
++        verify(condition, times(3)).test(any());
++        verifyNoMoreInteractions(condition);
++    }
++}
