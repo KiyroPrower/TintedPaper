@@ -172,6 +172,57 @@
       "source": "divinemc-server/minecraft-patches/features/0034-Player-ProfileResult-caching.patch",
       "status": "requires-redesign",
       "reason": "The source caches successful hasJoinedServer results by username and returns them for a later login challenge without fresh session validation. Do not import this authentication bypass; any replacement must validate every new challenge."
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0047-C2ME-Optimize-Aquifer-and-Beardifier.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Precompute aquifer cell centers with reusable positional random sources, use a four-nearest min/max network with native tie order, and reuse the per-aquifer pressure-noise scalar. Retain Paper's floating-point threshold operations. Widen candidate keys to long to preserve all 32 index bits; preserve positional factory classes and custom subclass behavior rather than converting public classes to records. Reseeding preserves the native all-zero Xoroshiro state normalization. Despite its title, the source patch contains no Beardifier changes.",
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/level/levelgen/Aquifer.java", "tintedpaper-server/src/minecraft/java/com/ishland/c2me/opts/worldgen/general/common/random_instances/RandomUtils.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineAquiferParityTest.java"],
+      "validation": "Normal and AllFeatures suites passed. Four aquifer regressions cover a pre-port terrain/fluid-update golden checksum across 18 seed/factory/origin combinations, independent nearest-center ordering with ties and indices above 65535, random stream parity including zero seeds, and custom factories retaining lazy sampling and Paper call order. No gameplay or benchmark validation."
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0046-C2ME-Limit-NBT-cache.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Bound IOWorker pending writes using the source's soft/hard defaults (8192/32678). Enforce the hard threshold inside foreground writes on the existing single executor so background starvation cannot bypass it. Drain oldest entries through native runStore, retaining coalesced data, null deletions and successful/exceptional futures. Normalize invalid limits and stop on an empty queue. This affects IOWorker users such as RecreatingSimpleRegionStorage; normal Moonrise chunk saves bypass this map and are not claimed to have a global memory cap.",
+      "config": ["performance.chunks.chunk-data-cache-soft-limit", "performance.chunks.chunk-data-cache-limit"],
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/level/chunk/storage/IOWorker.java", "tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/opt/NbtWriteCache.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineNbtWriteCacheTest.java"],
+      "validation": "Normal and AllFeatures suites passed. Four NBT regressions exercise foreground-only submission with background draining held, newest-data coalescing, FIFO/null deletion preservation, exceptional writes without lost futures, bounded extra background work, and zero/negative thresholds. Actual filesystem failure/upgrade behavior remains unverified."
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0015-Carpet-Fixes-Optimized-getBiome-method.patch",
+      "status": "covered-by-base",
+      "reason": "Retain the inherited Carpet-Fixes optimized biome-corner search, as requested for features with an existing base version. It already prunes candidates and additionally uses quart-offset lookup and Y-axis pruning. Its numeric bound and summation policy differ from DivineMC; this is a retained base variant, not a claim of bitwise equality between implementations.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0087-Carpet-Fixes-Optimized-getBiome-method.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/biome/BiomeManager.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0016-Carpet-Fixes-Sheep-Optimization.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited Gale/Carpet-Fixes properDye table covers the same color combinations and fallback-to-parent behavior. Preserve its per-world switch and existing simpleRandom use instead of introducing a competing global switch or changing its random stream. Both versions intentionally bypass data-driven dye mixing only when their option is enabled.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0054-Optimize-sheep-offspring-color.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/world/item/DyeColor.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0063-Pufferfish-Make-EntityCollisionContext-a-live-repres.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited Airplane/Gale implementation already removes cached descending, bottom and held-item state and reads those values from the live entity, with the same null/empty-context fallbacks and retained placement/fluid flags.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0014-Make-EntityCollisionContext-a-live-representation.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/world/phys/shapes/EntityCollisionContext.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0064-Pufferfish-Optimize-random-calls-in-chunk-ticking.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited implementation already uses a per-chunk lightning countdown and retains the same thunder/rain/configuration guards. Keep its world simpleRandom initialization rather than allocating a new java.util.Random per chunk as DivineMC does. This records the existing algorithm, not vanilla weather-sequence equivalence.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0012-Optimize-random-calls-in-chunk-ticking.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/chunk/LevelChunk.java", "tintedpaper-server/src/minecraft/java/net/minecraft/server/level/ServerLevel.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0065-Pufferfish-Reduce-projectile-chunk-loading.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited Gale implementation already provides the per-tick and per-projectile load counters, unloaded-chunk lookup, configurable discard and movement-reset behavior. Retain its per-world configuration and explicit Bukkit removal cause. No new claim of parallel-world safety is made for the inherited static counters.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0009-Reduce-projectile-chunk-loading.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/world/entity/projectile/Projectile.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0043-MSPT-Tracking-for-each-world.patch",
+      "status": "covered-by-base",
+      "reason": "World ticking already records the elapsed level tick duration into 100-, 200- and 1200-sample windows. Keep the existing tickTimes1m name and the additional TPS-bar integration rather than adding a duplicate tickTimes60s window. The matching world metrics API is also already inherited.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0176-SparklyPaper-Track-each-world-MSPT.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/server/MinecraftServer.java", "tintedpaper-server/src/minecraft/java/net/minecraft/server/level/ServerLevel.java"]
     }
   ],
   "compatibilityFixes": [
@@ -183,7 +234,7 @@
     }
   ],
   "pendingReview": [
-    "API supporting Java sources, including bottle events, and the pending reload-command / legacy enable-failure adaptations need their matching native and server integrations.",
+    "Pending reload-command / legacy enable-failure adaptations need compatible native and server integrations. Bottle event API and implementations are integrated.",
     "All active Minecraft feature patches not recorded above. Preliminary title matches are not sufficient to classify a patch as covered.",
     "All remaining Paper server feature and single-file patches, Purpur patches, supporting Java sources, dependencies and native resources.",
     "Partial duplicates require review of each remaining behavior before porting. Threaded features require ownership, lifecycle and shutdown review."

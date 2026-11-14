@@ -1,0 +1,161 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 23:23:54 -0300
+Subject: [PATCH] Test Divine aquifer terrain parity, large indices and
+ positional random reuse
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineAquiferParityTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineAquiferParityTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..5724806b39c2899dcf448567ac8fe7b6c59ad856
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineAquiferParityTest.java
+@@ -0,0 +1,148 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.util.IdentityHashMap;
++import java.util.Map;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.levelgen.Aquifer;
++import net.minecraft.world.level.levelgen.LegacyRandomSource;
++import net.minecraft.world.level.levelgen.PositionalRandomFactory;
++import net.minecraft.world.level.levelgen.XoroshiroRandomSource;
++import net.minecraft.world.level.levelgen.densityfunction.*;
++import org.bukkit.support.environment.AllFeatures;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.*;
++
++@AllFeatures
++class DivineAquiferParityTest {
++    @Test
++    void terrainAndFluidUpdatesMatchPinnedPaper() {
++        // Recorded before the port against the pinned Paper aquifer implementation.
++        long hash = 1;
++        for (long seed : new long[]{0, 42, Long.MIN_VALUE}) {
++            for (boolean legacy : new boolean[]{false, true}) {
++                for (int origin : new int[]{-32, 0, 29999968}) {
++                    PositionalRandomFactory random = legacy ? new LegacyRandomSource(seed).forkPositional() : new XoroshiroRandomSource(seed).forkPositional();
++                    Aquifer aquifer = create(random, new DensityVolume(16, 384, 16, origin, -64, -origin));
++                    for (int y = -64; y < 320; y += 3) {
++                        for (int x = origin; x < origin + 16; x += 3) {
++                            for (int z = -origin; z < -origin + 16; z += 3) {
++                                for (double density : new double[]{-1.0, -0.05, 0.0, 0.5}) {
++                                    var state = aquifer.computeSubstance(x, y, z, density);
++                                    int code = state == null ? 0 : state.is(Blocks.WATER) ? 1 : state.is(Blocks.LAVA) ? 2 : state.isAir() ? 3 : -1;
++                                    assertNotEquals(-1, code);
++                                    hash = hash * 31 + code * 2 + (aquifer.shouldScheduleFluidUpdate() ? 1 : 0);
++                                }
++                            }
++                        }
++                    }
++                }
++            }
++        }
++        assertEquals(2742515464454870953L, hash);
++    }
++
++    @Test
++    void nearestCentersPreserveTiesAndIndicesBeyondSixteenBits() throws Exception {
++        var aquifer = create(new XoroshiroRandomSource(42).forkPositional(), new DensityVolume(1024, 384, 1024, -512, -64, -512));
++        Class<?> type = aquifer.getClass();
++        var refresh = type.getDeclaredMethod("c2me$refreshClosest", int.class, int.class, int.class);
++        refresh.setAccessible(true);
++        var getIndex = type.getDeclaredMethod("getIndex", int.class, int.class, int.class);
++        getIndex.setAccessible(true);
++        var cacheField = type.getDeclaredField("aquiferLocationCache");
++        cacheField.setAccessible(true);
++        long[] centers = (long[]) cacheField.get(aquifer);
++        record Candidate(int index, int distance) {}
++        boolean largeIndex = false;
++        boolean tie = false;
++        for (int x = -504; x < 512; x += 127) {
++            for (int y = -60; y < 320; y += 11) {
++                int z = -x;
++                var expected = new java.util.ArrayList<Candidate>();
++                for (int offX = 0; offX <= 1; offX++) {
++                    for (int offY = -1; offY <= 1; offY++) {
++                        for (int offZ = 0; offZ <= 1; offZ++) {
++                            int index = (int) getIndex.invoke(aquifer, ((x - 5) >> 4) + offX, Math.floorDiv(y + 1, 12) + offY, ((z - 5) >> 4) + offZ);
++                            long center = centers[index];
++                            int dx = net.minecraft.core.BlockPos.getX(center) - x;
++                            int dy = net.minecraft.core.BlockPos.getY(center) - y;
++                            int dz = net.minecraft.core.BlockPos.getZ(center) - z;
++                            expected.add(0, new Candidate(index, dx * dx + dy * dy + dz * dz));
++                        }
++                    }
++                }
++                expected.sort(java.util.Comparator.comparingInt(Candidate::distance));
++                refresh.invoke(aquifer, x, y, z);
++                for (int n = 0; n < 4; n++) {
++                    var field = type.getDeclaredField("c2me$packed" + (n + 1));
++                    field.setAccessible(true);
++                    long actual = field.getLong(aquifer);
++                    assertEquals(expected.get(n).index(), (int) actual);
++                    assertEquals(expected.get(n).distance(), actual >>> 36);
++                    largeIndex |= expected.get(n).index() > 65535;
++                    tie |= n > 0 && expected.get(n).distance() == expected.get(n - 1).distance();
++                }
++            }
++        }
++        assertTrue(largeIndex);
++        assertTrue(tie);
++    }
++
++    @Test
++    void reusedRandomMatchesNativeSeedsIncludingZeroAndCustomFactories() {
++        var factories = java.util.List.of(
++            new LegacyRandomSource.LegacyPositionalRandomFactory(42),
++            new XoroshiroRandomSource.XoroshiroPositionalRandomFactory(0, 0),
++            new XoroshiroRandomSource.XoroshiroPositionalRandomFactory(Long.MIN_VALUE, Long.MAX_VALUE),
++            new LegacyRandomSource.LegacyPositionalRandomFactory(42) {
++                @Override
++                public net.minecraft.util.RandomSource at(int x, int y, int z) {
++                    return new LegacyRandomSource(x + y + z);
++                }
++            }
++        );
++        for (PositionalRandomFactory factory : factories) {
++            var reusable = com.ishland.c2me.opts.worldgen.general.common.random_instances.RandomUtils.getRandom(factory);
++            for (int x : new int[]{0, -1, 123456}) {
++                var expected = factory.at(x, 0, -x);
++                var actual = com.ishland.c2me.opts.worldgen.general.common.random_instances.RandomUtils.derive(factory, reusable, x, 0, -x);
++                for (int n = 0; n < 32; n++) assertEquals(expected.nextInt(n + 1), actual.nextInt(n + 1));
++            }
++        }
++    }
++
++    static Aquifer create(PositionalRandomFactory random, DensityVolume volume) {
++        DensityFunction[] functions = new DensityFunction[6];
++        Map<DensityFunction, DensitySampler.Bound> bound = new IdentityHashMap<>();
++        SamplerContext context = mock(SamplerContext.class);
++        when(context.acquireBuffer(any(DensityVolume.class))).thenAnswer(call -> {
++            int size = call.<DensityVolume>getArgument(0).size();
++            return new ScopedDensityBuffer(mock(DensityBufferArena.class), size, size);
++        });
++        for (int i = 0; i < functions.length; i++) {
++            functions[i] = mock(DensityFunction.class);
++            final int kind = i;
++            DensitySampler sampler = new DensitySampler() {
++                @Override
++                public float sampleValue(SamplerContext ignored, int x, int y, int z) {
++                    if (kind == 5) return 64 + Math.floorMod(x / 4 + z / 4, 40);
++                    if (kind == 4) return Math.floorMod(x + z, 17) == 0 ? 1 : -1;
++                    return (Math.floorMod(x * 31 + y * 17 + z * 7 + kind, 101) - 50) / 50.0F;
++                }
++
++                @Override
++                public void sampleVolume(SamplerContext ctx, DensityBuffer output, DensityVolume sampled) {
++                    DensitySampler.sampleVolumeNaive(ctx, output, sampled, this);
++                }
++            };
++            bound.put(functions[i], sampler.bind(context));
++        }
++        var water = new Aquifer.FluidStatus(63, Blocks.WATER.defaultBlockState());
++        var lava = new Aquifer.FluidStatus(-54, Blocks.LAVA.defaultBlockState());
++        return new Aquifer.Config(functions[0], functions[1], functions[2], functions[3], functions[4], functions[5])
++            .create(bound::get, random, volume, (x, y, z) -> y < -54 ? lava : water);
++    }
++}
