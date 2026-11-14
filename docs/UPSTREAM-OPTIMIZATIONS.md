@@ -7,7 +7,7 @@ FastNoise was requested twice and is tracked once.
 | Source | Pinned revision | State |
 | --- | --- | --- |
 | [BetterMaps](https://codeberg.org/NerjalNosk/bettermaps) | `a6e7fb7c5c31a1e54ec6ace339d4ca70c71f1488` | Opt-in deferred explorer-map integration implemented; five local regressions passed. Async/dynamic lookup and arbitrary request parameters remain pending. |
-| [Lomka](https://github.com/Starlevka/Lomka) | `5d8bf834d5d3efa783ecad0c3d2fb15a5634550f` | Bulk NBT array stream reads implemented; four local regression tests passed. Other server optimizations pending. |
+| [Lomka](https://github.com/Starlevka/Lomka) | `5d8bf834d5d3efa783ecad0c3d2fb15a5634550f` | Bulk NBT array reads and large balanced weighted-selector search implemented; six local regressions passed. Other server optimizations pending. |
 | [Worldthreader](https://github.com/2No2Name/worldthreader) | `6fbaef2f424d9a81c9d16617f58b58076c5d045c` | Existing parallel world ticking retained. A cache ownership race found during comparison is fixed and regression-tested; see PARALLEL-WORLD-PORT.md. Cross-world exclusivity and remaining compatibility mechanisms are pending. |
 | [UUID-Hex](https://github.com/CJDevZ/UUID-Hex) | `e538db835f6fc56809559be6f4d4c6b8bcee20e1` | Original functions bundled as an optional built-in datapack; three local regressions passed. Live command/storage execution remains untested. |
 | [Explodee](https://github.com/KnownSH/Explodee) | `58b4387177d3c24b434285612b9a5042f81952ff` | Spherical ray distribution implemented inside Moonrise's loop, opt-in and default false. Two local regressions passed. |
@@ -30,6 +30,23 @@ the native source and generated patch, with the original copyright recorded in
 `licenses/Lomka-NOTICE.txt`. Moonrise's separate optimized NBT I/O
 path remains unchanged; no claim is made that every chunk read uses this path.
 Reduced stream calls are verified by tests, not a measured server TPS gain.
+
+## Lomka weighted selectors
+
+Native `WeightedList.Compact` precomputes cumulative weights only with at least
+64 entries and an expected linear scan of at least 32 entries. Valid draws use
+an upper-bound binary search; small or front-heavy lists keep native scanning
+without additional array storage. Exceptional draws also keep the native scan.
+The existing constructor validation, one bounded random draw, entry order, zero
+weights, result distribution, serialization and codecs are preserved. Prefix
+data is immutable after construction and introduces no shared cache.
+
+This adapts Lomka's `MixinCompact` by Starlev and contributors, LGPL-3.0-only.
+Two regressions compare every draw across threshold sizes, random zero weights
+and front-heavy lists, plus seeded draws near the integer total-weight limit,
+codec round trips, empty lists, invalid draws and overflow/negative-weight
+validation. This verifies deterministic parity, not a measured speedup for a
+particular datapack or world-generation workload.
 
 ## Explodee and holiday caches
 

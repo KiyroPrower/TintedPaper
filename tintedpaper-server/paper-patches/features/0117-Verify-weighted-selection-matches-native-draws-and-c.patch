@@ -1,0 +1,96 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 13:53:24 -0300
+Subject: [PATCH] Verify weighted selection matches native draws and codecs
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/CompactWeightedSelectionTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/CompactWeightedSelectionTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..f64366c19bec432e9653a6e91621d892ad61e9d6
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/CompactWeightedSelectionTest.java
+@@ -0,0 +1,84 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Random;
++import java.util.concurrent.atomic.AtomicInteger;
++import net.minecraft.util.RandomSource;
++import net.minecraft.util.random.Weighted;
++import net.minecraft.util.random.WeightedList;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class CompactWeightedSelectionTest {
++    @Test
++    void everyDrawRetainsNativeOrderAcrossZeroWeightsAndThresholds() throws Exception {
++        Random weights = new Random(31927);
++        for (int size : new int[]{1, 2, 63, 64, 65, 128}) {
++            for (int shape = 0; shape < 3; shape++) {
++                List<Weighted<Integer>> entries = new ArrayList<>();
++                int total = 0;
++                for (int i = 0; i < size; i++) {
++                    int weight = shape == 0 ? 1 : shape == 1 && i == 0 ? 4096 : weights.nextInt(5);
++                    entries.add(new Weighted<>(i, weight));
++                    total += weight;
++                }
++                WeightedList<Integer> list = WeightedList.of(entries);
++                RandomSource random = mock(RandomSource.class);
++                AtomicInteger selection = new AtomicInteger();
++                when(random.nextInt(total)).thenAnswer(call -> selection.get());
++                for (int draw = 0; draw < total; draw++) {
++                    selection.set(draw);
++                    assertEquals(scan(entries, draw), list.getRandomOrThrow(random));
++                }
++                verify(random, times(total)).nextInt(total);
++                var selectorField = WeightedList.class.getDeclaredField("selector");
++                selectorField.setAccessible(true);
++                Object selector = selectorField.get(list);
++                if (size >= 64) {
++                    var sums = selector.getClass().getDeclaredField("cumulativeWeights");
++                    sums.setAccessible(true);
++                    if (shape == 0) assertNotNull(sums.get(selector));
++                    if (shape == 1) assertNull(sums.get(selector));
++                }
++            }
++        }
++    }
++
++    @Test
++    void largeWeightsSeededDrawsCodecsAndEmptyListsKeepTheirContracts() {
++        List<Weighted<Integer>> entries = new ArrayList<>();
++        for (int i = 0; i < 64; i++) entries.add(new Weighted<>(i, i == 63 ? Integer.MAX_VALUE : 0));
++        var list = WeightedList.of(entries);
++        var expectedRandom = RandomSource.create(84921);
++        var actualRandom = RandomSource.create(84921);
++        for (int i = 0; i < 1000; i++) assertEquals(scan(entries, expectedRandom.nextInt(Integer.MAX_VALUE)), list.getRandomOrThrow(actualRandom));
++        var codec = WeightedList.codec(com.mojang.serialization.Codec.INT);
++        var encoded = codec.encodeStart(com.mojang.serialization.JsonOps.INSTANCE, list).getOrThrow();
++        assertEquals(list, codec.parse(com.mojang.serialization.JsonOps.INSTANCE, encoded).getOrThrow());
++        var invalidRandom = mock(RandomSource.class);
++        when(invalidRandom.nextInt(Integer.MAX_VALUE)).thenReturn(-1, Integer.MAX_VALUE);
++        assertEquals(0, list.getRandomOrThrow(invalidRandom));
++        assertEquals("0 exceeded total weight", assertThrows(IllegalStateException.class, () -> list.getRandomOrThrow(invalidRandom)).getMessage());
++        entries.add(new Weighted<>(64, 1));
++        assertThrows(IllegalArgumentException.class, () -> WeightedList.of(entries));
++        assertThrows(IllegalArgumentException.class, () -> new Weighted<>(0, -1));
++        var empty = WeightedList.of(List.of(new Weighted<>(0, 0)));
++        var unusedRandom = mock(RandomSource.class);
++        assertTrue(empty.getRandom(unusedRandom).isEmpty());
++        assertThrows(IllegalStateException.class, () -> empty.getRandomOrThrow(unusedRandom));
++        verifyNoInteractions(unusedRandom);
++    }
++
++    private static int scan(List<Weighted<Integer>> entries, int draw) {
++        for (var entry : entries) {
++            draw -= entry.weight();
++            if (draw < 0) return entry.value();
++        }
++        throw new AssertionError();
++    }
++}
