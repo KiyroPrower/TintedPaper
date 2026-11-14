@@ -1,0 +1,106 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 13:28:40 -0300
+Subject: [PATCH] Port path-scoped entity NBT reads without filtering mutation
+ targets
+
+
+diff --git a/net/minecraft/commands/arguments/NbtPathArgument.java b/net/minecraft/commands/arguments/NbtPathArgument.java
+index e4c427b06f47a92ed6107c91a242464a8f6a8f53..ee2b788373aeb56a8578dc32b352e41b0837004a 100644
+--- a/net/minecraft/commands/arguments/NbtPathArgument.java
++++ b/net/minecraft/commands/arguments/NbtPathArgument.java
+@@ -644,6 +644,10 @@ public class NbtPathArgument implements ArgumentType<NbtPathArgument.NbtPath> {
+             this.tinted$namedReadPlan = named;
+         }
+ 
++        public @org.jspecify.annotations.Nullable String tintedTopLevelKey() {
++            return this.nodes.length != 0 && this.nodes[0] instanceof CompoundChildNode child ? child.name : null;
++        }
++
+         public List<Tag> get(final Tag tag) throws CommandSyntaxException {
+             // TintedPaper start - DPO reuse one result list for prepared compound-only paths
+             if (this.tinted$namedReadPlan && org.dreeam.leaf.config.modules.opt.DatapackOptimizations.nbtNamedReadPlan) {
+diff --git a/net/minecraft/server/commands/data/DataCommands.java b/net/minecraft/server/commands/data/DataCommands.java
+index b3539df4b3427d275e351f9fe4fa16331d1a420d..e77040a98ce4c8de4f9ad930719016f1f3423598 100644
+--- a/net/minecraft/server/commands/data/DataCommands.java
++++ b/net/minecraft/server/commands/data/DataCommands.java
+@@ -334,7 +334,7 @@ public class DataCommands {
+     private static List<Tag> resolveSourcePath(final CommandContext<CommandSourceStack> context, final ArgProvider<DataAccessor> sourceProvider) throws CommandSyntaxException {
+         DataAccessor source = sourceProvider.access(context);
+         NbtPathArgument.NbtPath sourcePath = NbtPathArgument.getPath(context, "sourcePath");
+-        return sourcePath.get(source.getData());
++        return sourcePath.get(readPathData(source, sourcePath));
+     }
+ 
+     private static int manipulateData(
+@@ -369,7 +369,7 @@ public class DataCommands {
+     }
+ 
+     public static Tag getSingleTag(final NbtPathArgument.NbtPath path, final DataAccessor accessor) throws CommandSyntaxException {
+-        Collection<Tag> tags = path.get(accessor.getData());
++        Collection<Tag> tags = path.get(readPathData(accessor, path));
+         Iterator<Tag> iterator = tags.iterator();
+         Tag result = iterator.next();
+         if (iterator.hasNext()) {
+@@ -379,6 +379,10 @@ public class DataCommands {
+         }
+     }
+ 
++    private static CompoundTag readPathData(final DataAccessor accessor, final NbtPathArgument.NbtPath path) throws CommandSyntaxException {
++        return accessor instanceof EntityDataAccessor entity ? entity.getData(path) : accessor.getData();
++    }
++
+     private static int getData(final CommandSourceStack source, final DataAccessor accessor, final NbtPathArgument.NbtPath path) throws CommandSyntaxException {
+         Tag tag = getSingleTag(path, accessor);
+ 
+diff --git a/net/minecraft/server/commands/data/EntityDataAccessor.java b/net/minecraft/server/commands/data/EntityDataAccessor.java
+index 2e3790e0cd8a3e4be0326b08d4cc40d9791a00b5..16e0999358c3e11ca770742f8820594e46fef494 100644
+--- a/net/minecraft/server/commands/data/EntityDataAccessor.java
++++ b/net/minecraft/server/commands/data/EntityDataAccessor.java
+@@ -17,7 +17,9 @@ import net.minecraft.server.commands.ArgProvider;
+ import net.minecraft.util.ProblemReporter;
+ import net.minecraft.world.entity.Entity;
+ import net.minecraft.world.entity.player.Player;
++import net.minecraft.world.item.ItemStack;
+ import net.minecraft.world.level.storage.TagValueInput;
++import net.minecraft.world.level.storage.TagValueOutput;
+ import org.slf4j.Logger;
+ 
+ public class EntityDataAccessor implements DataAccessor {
+@@ -53,6 +55,36 @@ public class EntityDataAccessor implements DataAccessor {
+         return NbtPredicate.getEntityTagToCompare(this.entity);
+     }
+ 
++    public CompoundTag getData(final NbtPathArgument.NbtPath path) {
++        String key = path.tintedTopLevelKey();
++        if (this.getClass() != EntityDataAccessor.class || !org.dreeam.leaf.config.modules.opt.NbtPartial.active()
++            || !org.dreeam.leaf.config.modules.opt.NbtPartial.pathScopedDataReads
++            || org.dreeam.leaf.config.modules.opt.NbtPartial.pathScopedDisabledByMismatch.get() || key == null) {
++            return this.getData();
++        }
++        try (ProblemReporter.ScopedCollector reporter = new ProblemReporter.ScopedCollector(this.entity.problemPath(), LOGGER)) {
++            TagValueOutput output = TagValueOutput.createWithContext(reporter, this.entity.registryAccess());
++            this.entity.saveWithoutId(new org.dreeam.leaf.util.nbt.KeyFilterValueOutput(output, key::equals));
++            if (NbtPredicate.SELECTED_ITEM_TAG.equals(key) && this.entity instanceof Player player) {
++                ItemStack selected = player.getInventory().getSelectedItem();
++                if (!selected.isEmpty()) {
++                    output.store(NbtPredicate.SELECTED_ITEM_TAG, ItemStack.CODEC, selected);
++                }
++            }
++            CompoundTag partial = output.buildResult();
++            if (org.dreeam.leaf.config.modules.opt.NbtPartial.pathScopedVerified.get() < org.dreeam.leaf.config.modules.opt.NbtPartial.verifySamples) {
++                CompoundTag full = this.getData();
++                if (!java.util.Objects.equals(partial.get(key), full.get(key))) {
++                    org.dreeam.leaf.config.modules.opt.NbtPartial.pathScopedDisabledByMismatch.set(true);
++                    LOGGER.error("Path-scoped entity NBT differed for key {}; scoped data reads are disabled until restart.", key);
++                    return full;
++                }
++                org.dreeam.leaf.config.modules.opt.NbtPartial.pathScopedVerified.incrementAndGet();
++            }
++            return partial;
++        }
++    }
++
+     @Override
+     public Component getModifiedSuccess() {
+         return Component.translatable("commands.data.entity.modified", this.entity.getDisplayName());

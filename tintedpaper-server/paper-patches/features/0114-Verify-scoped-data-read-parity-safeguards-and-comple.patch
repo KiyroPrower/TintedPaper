@@ -1,0 +1,220 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 13:28:41 -0300
+Subject: [PATCH] Verify scoped data read parity, safeguards and complete
+ mutation targets
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/PathScopedEntityDataTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/PathScopedEntityDataTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..2458fc306cb52858a29cbbc729932938d8dec310
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/PathScopedEntityDataTest.java
+@@ -0,0 +1,207 @@
++package org.bukkit.craftbukkit.tinted;
++
++import com.mojang.brigadier.context.CommandContext;
++import com.mojang.brigadier.exceptions.CommandSyntaxException;
++import com.mojang.serialization.Codec;
++import io.papermc.paper.configuration.WorldConfiguration;
++import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
++import java.lang.reflect.Method;
++import java.util.List;
++import java.util.UUID;
++import java.util.concurrent.atomic.AtomicInteger;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.arguments.NbtPathArgument.NbtPath;
++import net.minecraft.core.RegistryAccess;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.IntTag;
++import net.minecraft.nbt.TagParser;
++import net.minecraft.server.commands.ArgProvider;
++import net.minecraft.server.commands.data.DataAccessor;
++import net.minecraft.server.commands.data.DataCommands;
++import net.minecraft.server.commands.data.EntityDataAccessor;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.util.ProblemReporter;
++import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.Marker;
++import net.minecraft.world.entity.player.Inventory;
++import net.minecraft.world.entity.player.Player;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.item.Items;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.storage.ValueOutput;
++import org.bukkit.craftbukkit.CraftWorld;
++import org.bukkit.support.RegistryHelper;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.opt.NbtPartial;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.purpurmc.purpur.PurpurWorldConfig;
++import org.spigotmc.SpigotWorldConfig;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class PathScopedEntityDataTest {
++    private final boolean enabled = NbtPartial.enabled;
++    private final boolean scoped = NbtPartial.pathScopedDataReads;
++    private final int samples = NbtPartial.verifySamples;
++
++    @BeforeEach
++    void enable() {
++        NbtPartial.enabled = true;
++        NbtPartial.pathScopedDataReads = true;
++        NbtPartial.verifySamples = 0;
++        NbtPartial.disabledByMismatch.set(false);
++        NbtPartial.pathScopedDisabledByMismatch.set(false);
++        NbtPartial.pathScopedVerified.set(0);
++    }
++
++    @AfterEach
++    void restore() {
++        NbtPartial.enabled = this.enabled;
++        NbtPartial.pathScopedDataReads = this.scoped;
++        NbtPartial.verifySamples = this.samples;
++        NbtPartial.pathScopedDisabledByMismatch.set(false);
++        NbtPartial.pathScopedVerified.set(0);
++    }
++
++    @Test
++    void uuidAndQuotedKeyReadsSkipUnrelatedCodecsAndAlwaysObserveCurrentValues() throws Exception {
++        CountingMarker entity = entity();
++        EntityDataAccessor accessor = new EntityDataAccessor(entity);
++        CompoundTag full = accessor.getData();
++        entity.encodes.set(0);
++        assertEquals(full.get("UUID"), DataCommands.getSingleTag(NbtPath.of("UUID"), accessor));
++        assertEquals(IntTag.valueOf(7), DataCommands.getSingleTag(NbtPath.of("'quoted.key'"), accessor));
++        entity.value = 11;
++        assertEquals(IntTag.valueOf(11), DataCommands.getSingleTag(NbtPath.of("nested.value"), accessor));
++        assertEquals(0, entity.encodes.get());
++        assertTrue(accessor.getData().contains("expensive"));
++        assertEquals(1, entity.encodes.get());
++    }
++
++    @Test
++    void missingMultipleAndRootMatchPathsPreserveNativeErrors() throws Exception {
++        EntityDataAccessor accessor = new EntityDataAccessor(entity());
++        for (String text : new String[]{"missing", "nested.missing", "nested.values[]", "{absent:1}"}) {
++            NbtPath path = NbtPath.of(text);
++            NbtPartial.pathScopedDataReads = false;
++            CommandSyntaxException full = assertThrows(CommandSyntaxException.class, () -> DataCommands.getSingleTag(path, accessor));
++            NbtPartial.pathScopedDataReads = true;
++            CommandSyntaxException scoped = assertThrows(CommandSyntaxException.class, () -> DataCommands.getSingleTag(path, accessor));
++            assertSame(full.getType(), scoped.getType());
++            assertEquals(full.getMessage(), scoped.getMessage());
++        }
++        assertNull(NbtPath.of("{absent:1}").tintedTopLevelKey());
++    }
++
++    @Test
++    void verificationStopsAtItsBudgetAndDisablesOnlyScopedReadsOnMismatch() throws Exception {
++        CountingMarker entity = entity();
++        EntityDataAccessor accessor = new EntityDataAccessor(entity);
++        NbtPartial.verifySamples = 1;
++        DataCommands.getSingleTag(NbtPath.of("UUID"), accessor);
++        DataCommands.getSingleTag(NbtPath.of("UUID"), accessor);
++        assertEquals(1, entity.encodes.get(), "only the verification full read encodes unrelated data");
++        assertEquals(1, NbtPartial.pathScopedVerified.get());
++        NbtPartial.pathScopedVerified.set(0);
++        entity.changing = true;
++        CompoundTag fallback = accessor.getData(NbtPath.of("changing"));
++        assertTrue(fallback.contains("expensive"));
++        assertTrue(NbtPartial.pathScopedDisabledByMismatch.get());
++        assertFalse(NbtPartial.disabledByMismatch.get());
++        assertTrue(accessor.getData(NbtPath.of("UUID")).contains("expensive"));
++    }
++
++    @Test
++    void sourcePathUsesScopedReadsButMutationTargetsRemainComplete() throws Exception {
++        CountingMarker entity = entity();
++        EntityDataAccessor accessor = new EntityDataAccessor(entity);
++        CommandContext<CommandSourceStack> context = mock(CommandContext.class);
++        NbtPath path = NbtPath.of("nested.value");
++        when(context.getArgument("sourcePath", NbtPath.class)).thenReturn(path);
++        ArgProvider<DataAccessor> provider = mock(ArgProvider.class);
++        when(provider.access(context)).thenReturn(accessor);
++        Method resolve = DataCommands.class.getDeclaredMethod("resolveSourcePath", CommandContext.class, ArgProvider.class);
++        resolve.setAccessible(true);
++        assertEquals(List.of(IntTag.valueOf(7)), resolve.invoke(null, context, provider));
++        assertEquals(0, entity.encodes.get());
++
++        DataAccessor target = mock(DataAccessor.class);
++        CompoundTag all = TagParser.parseCompoundFully("{remove:1,unrelated:{keep:42}}");
++        when(target.getData()).thenReturn(all);
++        Method remove = DataCommands.class.getDeclaredMethod("removeData", CommandSourceStack.class, DataAccessor.class, NbtPath.class);
++        remove.setAccessible(true);
++        assertEquals(1, remove.invoke(null, mock(CommandSourceStack.class), target, NbtPath.of("remove")));
++        assertEquals(42, all.getCompound("unrelated").orElseThrow().getIntOr("keep", 0));
++        verify(target).setData(same(all));
++    }
++
++    @Test
++    void selectedItemAndAccessorOverridesKeepTheirNativeBehavior() throws Exception {
++        Player player = mock(Player.class);
++        when(player.registryAccess()).thenReturn(RegistryHelper.registryAccess());
++        when(player.problemPath()).thenReturn(mock(ProblemReporter.PathElement.class));
++        Inventory inventory = mock(Inventory.class);
++        when(player.getInventory()).thenReturn(inventory);
++        when(inventory.getSelectedItem()).thenReturn(new ItemStack(Items.DIAMOND_SWORD));
++        doAnswer(call -> { call.getArgument(0, ValueOutput.class).putString("test", "value"); return null; }).when(player).saveWithoutId(any(ValueOutput.class));
++        EntityDataAccessor accessor = new EntityDataAccessor(player);
++        assertEquals(accessor.getData().get("SelectedItem"), accessor.getData(NbtPath.of("SelectedItem")).get("SelectedItem"));
++        clearInvocations(player);
++        assertEquals("value", accessor.getData(NbtPath.of("test")).getStringOr("test", ""));
++        verify(player, never()).getInventory();
++
++        CompoundTag custom = TagParser.parseCompoundFully("{custom:9}");
++        EntityDataAccessor overridden = new EntityDataAccessor(player) {
++            @Override
++            public CompoundTag getData() { return custom; }
++        };
++        assertEquals(IntTag.valueOf(9), DataCommands.getSingleTag(NbtPath.of("custom"), overridden));
++    }
++
++    private static CountingMarker entity() throws Exception {
++        ServerLevel level = mock(ServerLevel.class);
++        var purpur = Level.class.getField("purpurConfig");
++        purpur.setAccessible(true);
++        purpur.set(level, mock(PurpurWorldConfig.class));
++        var spigot = Level.class.getField("spigotConfig");
++        spigot.setAccessible(true);
++        spigot.set(level, mock(SpigotWorldConfig.class));
++        WorldConfiguration config = mock(WorldConfiguration.class);
++        config.entities = mock(WorldConfiguration.Entities.class);
++        config.entities.spawning = mock(WorldConfiguration.Entities.Spawning.class);
++        config.entities.spawning.despawnTime = new Reference2ObjectOpenHashMap<>();
++        when(level.paperConfig()).thenReturn(config);
++        when(level.getNextEntityId()).thenReturn(1);
++        when(level.registryAccess()).thenReturn(RegistryAccess.EMPTY);
++        CraftWorld world = mock(CraftWorld.class);
++        when(world.getUID()).thenReturn(new UUID(1, 2));
++        when(level.getWorld()).thenReturn(world);
++        return new CountingMarker(level);
++    }
++
++    private static final class CountingMarker extends Marker {
++        final AtomicInteger encodes = new AtomicInteger();
++        final Codec<Integer> expensive = Codec.INT.xmap(v -> v, v -> { this.encodes.incrementAndGet(); return v; });
++        int value = 7;
++        int saves;
++        boolean changing;
++
++        CountingMarker(ServerLevel level) { super(EntityTypes.MARKER, level); }
++
++        @Override
++        protected void addAdditionalSaveData(ValueOutput output) {
++            output.store("expensive", this.expensive, 42);
++            output.putInt("quoted.key", this.value);
++            output.putInt("changing", this.changing ? ++this.saves : 0);
++            ValueOutput nested = output.child("nested");
++            nested.putInt("value", this.value);
++            var values = nested.list("values", Codec.INT);
++            values.add(1);
++            values.add(2);
++        }
++    }
++}

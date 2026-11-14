@@ -9,6 +9,9 @@ public class NbtPartial extends ConfigModule {
     public static volatile boolean enabled = true;
     public static volatile int verifySamples = 500;
     public static volatile boolean selectorReadFilter = true;
+    public static volatile boolean pathScopedDataReads = false;
+    public static final AtomicBoolean pathScopedDisabledByMismatch = new AtomicBoolean();
+    public static final AtomicLong pathScopedVerified = new AtomicLong();
 
     /** Set when a partial result differed from the full serialization; partial matching then stays off until restart. */
     public static final AtomicBoolean disabledByMismatch = new AtomicBoolean();
@@ -32,6 +35,8 @@ public class NbtPartial extends ConfigModule {
             "Compare this many partial results against the full serialization at startup. On the first difference partial matching turns itself off. 0 disables the check."));
         selectorReadFilter = globalConfig.getBoolean(basePath() + ".selector-read-filter", selectorReadFilter,
             "In @e[nbt=], skip the player's SelectedItem when the compared tag does not mention it.");
+        pathScopedDataReads = globalConfig.getBoolean(basePath() + ".path-scoped-data-reads", false,
+            "Serialize only the top-level entity key read by /data get or a /data modify source path. Writes and unscoped reads remain complete; uses the verification sample budget separately.");
     }
 
     public static boolean active() {

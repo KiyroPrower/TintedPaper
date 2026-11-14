@@ -11,10 +11,10 @@ This is an incomplete migration, not a replacement release for DPO.
 
 | Active injections | Decision |
 | --- | --- |
-| 22 | Native behaviour implemented and local regression suite passed |
+| 24 | Native behaviour implemented and local regression suite passed |
 | 36 | Equivalent mechanism verified in the pinned TintedPaper/Paper baseline |
 | 6 | Removed 26.2 noise pipeline or DivineMC-only implementation |
-| 393 | Native target found; semantic comparison still pending |
+| 391 | Native target found; semantic comparison still pending |
 | 1 | External target still needs source resolution |
 
 The source manifests contain 458 active injections. Matching a target file is
@@ -61,7 +61,13 @@ decision entries fail rather than disappearing from the inventory.
   predicates (advancements, loot conditions and `predicate=`) and `NbtPredicate.matches(Entity)`.
   Matching still runs `NbtUtils.compareNbt` on the filtered tag. `NbtPredicate.matches` checks its
   first 500 results against the full serialization and stops filtering on the first difference
-  (`tintedpaper.datapacks.nbt-partial.*`). The `/data get` path-scoped variant is still pending.
+  (`tintedpaper.datapacks.nbt-partial.*`). Opt-in `path-scoped-data-reads` also
+  filters entity `/data get` and read-only `/data modify ... from ...` paths.
+  Mutation targets and unscoped reads remain complete. Root matches, custom
+  accessors and block/storage accessors retain native serialization. Requested
+  subtrees have their own verification counter using the same configured sample limit;
+  a mismatch disables only scoped command reads until restart. No values are
+  cached, and the default remains false.
 - Dirt paths check a piston's carried block, retaining the native solid-block and
   fence-gate rules. Missing piston block entities retain the original fallback.
 - Cube shapes reuse three immutable coordinate ranges, initialized before the
@@ -100,7 +106,7 @@ containers now belong to each parse, and the callback uses the existing material
 conversion helper. The test fixture now initializes Gale alongside Paper, and the
 regressions live inside a package selected by the existing test suites.
 
-These controls live in `config/leaf-global.yml`, through the existing native config
+These controls live in `config/tintedpaper-global.yml`, through the existing native config
 module loader:
 
 ```yaml
