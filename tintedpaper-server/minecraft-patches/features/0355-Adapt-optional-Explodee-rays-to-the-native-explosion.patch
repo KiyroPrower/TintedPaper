@@ -1,0 +1,49 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 12:52:37 -0300
+Subject: [PATCH] Adapt optional Explodee rays to the native explosion cache
+ loop
+
+Explodee by KnownSH, MIT-0. Retain Paper/Moonrise block, event, damage and knockback handling; default remains native rays.
+
+diff --git a/net/minecraft/world/level/ServerExplosion.java b/net/minecraft/world/level/ServerExplosion.java
+index 0d0ace1217f956401e938808253dfd33e24d366c..8d8d982469ae34e7cee03b4f3a8215cecb1491dd 100644
+--- a/net/minecraft/world/level/ServerExplosion.java
++++ b/net/minecraft/world/level/ServerExplosion.java
+@@ -396,18 +396,30 @@ public class ServerExplosion implements Explosion {
+         // calculations in one go
+         // additional aggressive caching of block retrieval is very significant, as at low power (i.e tnt) most
+         // block retrievals are not unique
+-        for (int ray = 0, len = CACHED_RAYS.length; ray < len;) {
++        // TintedPaper - Explodee: change only the ray distribution, retaining Moonrise caches and Paper hooks.
++        final boolean spherical = org.dreeam.leaf.config.modules.opt.SphericalExplosions.enabled && Float.isFinite(this.radius);
++        final int rayCount = spherical ? org.dreeam.leaf.util.SphericalExplosionRays.count(this.radius) : CACHED_RAYS.length / 3;
++        final double[] rayDirection = spherical ? new double[3] : null;
++        for (int ray = 0; ray < rayCount; ray++) {
+             ca.spottedleaf.moonrise.patches.collisions.ExplosionBlockCache cachedBlock = initialCache;
+ 
+             double currX = center.x;
+             double currY = center.y;
+             double currZ = center.z;
+ 
+-            final double incX = CACHED_RAYS[ray];
+-            final double incY = CACHED_RAYS[ray + 1];
+-            final double incZ = CACHED_RAYS[ray + 2];
+-
+-            ray += 3;
++            final double incX;
++            final double incY;
++            final double incZ;
++            if (spherical) {
++                org.dreeam.leaf.util.SphericalExplosionRays.direction(ray, rayCount, rayDirection);
++                incX = rayDirection[0] * (double) 0.3F;
++                incY = rayDirection[1] * (double) 0.3F;
++                incZ = rayDirection[2] * (double) 0.3F;
++            } else {
++                incX = CACHED_RAYS[ray * 3];
++                incY = CACHED_RAYS[ray * 3 + 1];
++                incZ = CACHED_RAYS[ray * 3 + 2];
++            }
+ 
+             float power = this.radius * (0.7F + this.level.getRandom().nextFloat() * 0.6F);
+ 

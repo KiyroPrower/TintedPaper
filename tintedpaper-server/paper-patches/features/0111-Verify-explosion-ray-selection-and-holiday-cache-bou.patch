@@ -1,0 +1,161 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 12:52:39 -0300
+Subject: [PATCH] Verify explosion ray selection and holiday cache boundaries
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/ChristmasCacheTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/ChristmasCacheTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..9219092978f4ca74ba2cacb9ffe543ae8bcc9b25
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/ChristmasCacheTest.java
+@@ -0,0 +1,59 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.lang.reflect.Method;
++import java.time.Instant;
++import java.time.LocalDate;
++import java.time.MonthDay;
++import java.time.ZoneId;
++import java.util.ArrayList;
++import java.util.concurrent.Callable;
++import java.util.concurrent.Executors;
++import net.minecraft.util.SpecialDates;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++@Normal
++class ChristmasCacheTest {
++    private static boolean cached(long millis, ZoneId zone) throws Exception {
++        Method method = SpecialDates.class.getDeclaredMethod("tintedIsExtendedChristmas", long.class, ZoneId.class);
++        method.setAccessible(true);
++        return (boolean) method.invoke(null, millis, zone);
++    }
++
++    @Test
++    void matchesNativeCalendarAcrossBoundariesYearsAndClockRewinds() throws Exception {
++        for (ZoneId zone : new ZoneId[]{ZoneId.of("UTC"), ZoneId.of("America/Sao_Paulo"), ZoneId.of("Pacific/Auckland")}) {
++            for (String date : new String[]{"2026-12-23", "2026-12-24", "2026-12-25", "2026-12-26", "2026-12-27", "2027-01-01", "2026-12-24"}) {
++                LocalDate day = LocalDate.parse(date);
++                long start = day.atStartOfDay(zone).toInstant().toEpochMilli();
++                long end = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
++                for (long millis : new long[]{start - 1, start, start + 1, end - 1, end}) {
++                    boolean expected = SpecialDates.CHRISTMAS_RANGE.contains(MonthDay.from(Instant.ofEpochMilli(millis).atZone(zone)));
++                    assertEquals(expected, cached(millis, zone));
++                    assertEquals(expected, cached(millis, zone));
++                }
++            }
++        }
++    }
++
++    @Test
++    void timezoneChangesAndConcurrentCallsNeverReuseAnotherZonesAnswer() throws Exception {
++        long millis = Instant.parse("2026-12-24T00:01:00Z").toEpochMilli();
++        ZoneId east = ZoneId.of("Pacific/Auckland");
++        ZoneId west = ZoneId.of("America/Los_Angeles");
++        try (var executor = Executors.newFixedThreadPool(4)) {
++            var calls = new ArrayList<Callable<Void>>();
++            for (int i = 0; i < 100; i++) {
++                ZoneId zone = (i & 1) == 0 ? east : west;
++                calls.add(() -> {
++                    boolean expected = SpecialDates.CHRISTMAS_RANGE.contains(MonthDay.from(Instant.ofEpochMilli(millis).atZone(zone)));
++                    assertEquals(expected, cached(millis, zone));
++                    return null;
++                });
++            }
++            for (var result : executor.invokeAll(calls)) result.get();
++        }
++    }
++}
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/SphericalExplosionTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/SphericalExplosionTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..1db958bb067c7c7406cf7f3d8e97ad82a557891c
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/SphericalExplosionTest.java
+@@ -0,0 +1,84 @@
++package org.bukkit.craftbukkit.tinted;
++
++import ca.spottedleaf.moonrise.patches.collisions.ExplosionBlockCache;
++import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
++import java.lang.reflect.Field;
++import java.lang.reflect.Method;
++import java.util.List;
++import net.minecraft.core.BlockPos;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.util.RandomSource;
++import net.minecraft.world.damagesource.DamageSource;
++import net.minecraft.world.level.Explosion;
++import net.minecraft.world.level.ExplosionDamageCalculator;
++import net.minecraft.world.level.ServerExplosion;
++import net.minecraft.world.phys.Vec3;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.opt.SphericalExplosions;
++import org.dreeam.leaf.util.SphericalExplosionRays;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class SphericalExplosionTest {
++    @Test
++    void raysMatchTheSourceDistributionAndCachedValuesCannotBeMutated() {
++        assertEquals(100, SphericalExplosionRays.count(4));
++        assertEquals(100, SphericalExplosionRays.count(10));
++        assertEquals(144, SphericalExplosionRays.count(12));
++        double[] direction = new double[3];
++        for (int count : new int[]{100, 101, 144, 1024}) {
++            for (int ray = 0; ray < count; ray++) {
++                SphericalExplosionRays.direction(ray, count, direction);
++                double phi = Math.acos(1 - 2.0 * ray / count);
++                double theta = Math.PI * (1 + Math.sqrt(5)) * ray;
++                assertArrayEquals(new double[]{Math.sin(phi) * Math.cos(theta), Math.sin(phi) * Math.sin(theta), Math.cos(phi)}, direction);
++                assertEquals(1.0, direction[0] * direction[0] + direction[1] * direction[1] + direction[2] * direction[2], 1.0E-14);
++            }
++        }
++        SphericalExplosionRays.direction(15, 100, direction);
++        double expected = direction[0];
++        direction[0] = 999;
++        SphericalExplosionRays.direction(15, 100, direction);
++        assertEquals(expected, direction[0]);
++    }
++
++    @Test
++    void nativeExplosionLoopUsesTheConfiguredDistributionAndRetainsDefaultRayCount() throws Exception {
++        boolean previous = SphericalExplosions.enabled;
++        try {
++            assertRayCount(false, 4, 16 * 16 * 16 - 14 * 14 * 14);
++            assertRayCount(true, 4, 100);
++            assertRayCount(true, 12, 144);
++            assertRayCount(true, Float.NaN, 16 * 16 * 16 - 14 * 14 * 14);
++            assertRayCount(false, 4, 16 * 16 * 16 - 14 * 14 * 14);
++        } finally {
++            SphericalExplosions.enabled = previous;
++        }
++    }
++
++    private static void assertRayCount(boolean spherical, float radius, int expected) throws Exception {
++        SphericalExplosions.enabled = spherical;
++        ServerLevel level = mock(ServerLevel.class);
++        RandomSource random = mock(RandomSource.class);
++        when(level.getRandom()).thenReturn(random);
++        ServerExplosion explosion = new ServerExplosion(level, null, mock(DamageSource.class), mock(ExplosionDamageCalculator.class), Vec3.ZERO, radius, false, Explosion.BlockInteraction.DESTROY);
++        var cache = new Long2ObjectOpenHashMap<ExplosionBlockCache>();
++        // An out-of-world origin stops every ray immediately, isolating distribution selection from block mechanics.
++        cache.put(BlockPos.ZERO.asLong(), new ExplosionBlockCache(BlockPos.ZERO.asLong(), BlockPos.ZERO, null, null, 0, true));
++        Field blockCache = ServerExplosion.class.getDeclaredField("blockCache");
++        blockCache.setAccessible(true);
++        blockCache.set(explosion, cache);
++        Field directCache = ServerExplosion.class.getDeclaredField("directMappedBlockCache");
++        directCache.setAccessible(true);
++        directCache.set(explosion, new ExplosionBlockCache[512]);
++        Method calculate = ServerExplosion.class.getDeclaredMethod("calculateExplodedPositions");
++        calculate.setAccessible(true);
++        assertEquals(List.of(), calculate.invoke(explosion));
++        verify(random, times(expected)).nextFloat();
++        verify(level, never()).getChunk(anyInt(), anyInt());
++        assertEquals(1, cache.size());
++    }
++}
