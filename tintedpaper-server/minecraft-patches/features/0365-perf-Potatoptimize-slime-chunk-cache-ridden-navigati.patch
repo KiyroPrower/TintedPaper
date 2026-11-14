@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sodium <sodium@kiyro.dev>
+Date: Sat, 14 Nov 2026 15:31:16 -0300
+Subject: [PATCH] perf: Potatoptimize slime chunk cache, ridden navigation and
+ portal collision skips
+
+
+diff --git a/net/minecraft/world/entity/ai/navigation/PathNavigation.java b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+index c3897945c6282a69de6d55d8c9982558a7514701..1433defbcdf29594f4c5e6289849b91f163d8ec1 100644
+--- a/net/minecraft/world/entity/ai/navigation/PathNavigation.java
++++ b/net/minecraft/world/entity/ai/navigation/PathNavigation.java
+@@ -296,6 +296,11 @@ public abstract class PathNavigation {
+     }
+ 
+     public void tick() {
++        // TintedPaper start - Potatoptimize: a mob riding a non-living vehicle does not move along its path, so skip pathfinding
++        if (org.dreeam.leaf.config.modules.opt.PotatoptimizeCaches.skipRiddenNavigation && this.mob.isPassenger() && !(this.mob.getVehicle() instanceof net.minecraft.world.entity.LivingEntity)) {
++            return;
++        }
++        // TintedPaper end - Potatoptimize
+         this.tick++;
+         if (this.hasDelayedRecomputation) {
+             this.recomputePath();
+diff --git a/net/minecraft/world/entity/monster/cubemob/Slime.java b/net/minecraft/world/entity/monster/cubemob/Slime.java
+index 0e582eab13bfbfa3e973b8308eb01ba1ba1b00ab..5bdd102b02e2a0dc23d9520d1790a7c1ceee7a9a 100644
+--- a/net/minecraft/world/entity/monster/cubemob/Slime.java
++++ b/net/minecraft/world/entity/monster/cubemob/Slime.java
+@@ -172,7 +172,9 @@ public class Slime extends AbstractCubeMob implements Enemy {
+             // Leaf start - Matter - Secure Seed
+             boolean slimeChunk = level.getMinecraftWorld().paperConfig().entities.spawning.allChunksAreSlimeChunks || (org.dreeam.leaf.config.modules.misc.SecureSeed.enabled
+                 ? level.getChunk(chunkPos.x(), chunkPos.z()).isSlimeChunk()
+-                : WorldgenRandom.seedSlimeChunk(chunkPos.x(), chunkPos.z(), worldGenLevel.getSeed(), level.getMinecraftWorld().spigotConfig.slimeSeed).nextInt(10) == 0); // Paper
++                : org.dreeam.leaf.config.modules.opt.PotatoptimizeCaches.slimeChunkCache
++                    ? level.getChunk(chunkPos.x(), chunkPos.z()).tintedIsSlimeChunk(worldGenLevel.getSeed(), level.getMinecraftWorld().spigotConfig.slimeSeed) // TintedPaper - Potatoptimize: slime chunk cache
++                    : WorldgenRandom.seedSlimeChunk(chunkPos.x(), chunkPos.z(), worldGenLevel.getSeed(), level.getMinecraftWorld().spigotConfig.slimeSeed).nextInt(10) == 0); // Paper
+             // Leaf end - Matter - Secure Seed
+             // Paper start - Replace rules for Height in Slime Chunks
+             final double maxHeightSlimeChunk = level.getMinecraftWorld().paperConfig().entities.spawning.slimeSpawnHeight.slimeChunk.maximum;
+diff --git a/net/minecraft/world/level/chunk/ChunkAccess.java b/net/minecraft/world/level/chunk/ChunkAccess.java
+index 363f0e8579b2f46a6b804b3477923d50182a3455..cc795947eccb8961e07a2cc5e9a560133f58ab97 100644
+--- a/net/minecraft/world/level/chunk/ChunkAccess.java
++++ b/net/minecraft/world/level/chunk/ChunkAccess.java
+@@ -216,6 +216,19 @@ public abstract class ChunkAccess implements LightChunk, StructureAccess, BiomeR
+     }
+     // Leaf end - Matter - Secure Seed
+ 
++    // TintedPaper start - Potatoptimize: cache the vanilla slime chunk roll in the chunk (a chunk belongs to one level, so seeds are constant)
++    private byte tintedSlimeChunk; // 0 unknown, 1 yes, 2 no
++
++    public boolean tintedIsSlimeChunk(final long worldSeed, final long slimeSeed) {
++        byte cached = this.tintedSlimeChunk;
++        if (cached == 0) {
++            cached = (byte) (net.minecraft.world.level.levelgen.WorldgenRandom.seedSlimeChunk(this.chunkPos.x(), this.chunkPos.z(), worldSeed, slimeSeed).nextInt(10) == 0 ? 1 : 2);
++            this.tintedSlimeChunk = cached;
++        }
++        return cached == 1;
++    }
++    // TintedPaper end - Potatoptimize: cache the vanilla slime chunk roll in the chunk
++
+     public abstract BlockState getBlockState(final int x, final int y, final int z); // Paper
+ 
+     public @Nullable BlockState setBlockState(final BlockPos pos, final BlockState state) {
+diff --git a/net/minecraft/world/level/portal/PortalShape.java b/net/minecraft/world/level/portal/PortalShape.java
+index 5699e75d8cc9a5a2928dbe5f2c74c35bda1d2f64..ba5f099dc088fb3682d45bd45a56142c94c04ab6 100644
+--- a/net/minecraft/world/level/portal/PortalShape.java
++++ b/net/minecraft/world/level/portal/PortalShape.java
+@@ -248,6 +248,9 @@ public class PortalShape {
+     }
+ 
+     public static Vec3 findCollisionFreePosition(final Vec3 bottomCenter, final ServerLevel serverLevel, final Entity entity, final EntityDimensions dimensions) {
++        if (org.dreeam.leaf.config.modules.opt.PotatoptimizeCaches.skipPortalCollisionSearch) { // TintedPaper - Potatoptimize: skip the collision-free position search
++            return bottomCenter;
++        }
+         if (!(dimensions.width() > 4.0F) && !(dimensions.height() > 4.0F)) {
+             double halfHeight = dimensions.height() / 2.0;
+             Vec3 center = bottomCenter.add(0.0, halfHeight, 0.0);
