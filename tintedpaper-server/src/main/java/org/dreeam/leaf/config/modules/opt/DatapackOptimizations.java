@@ -10,6 +10,7 @@ public final class DatapackOptimizations extends ConfigModule {
     public static volatile boolean unknownTagHolderSets = true;
     public static volatile boolean selectorAliveCheckLast = true;
     public static volatile boolean selectorTagIndex = true;
+    public static volatile boolean selectorPredicateLookup = true;
     public static volatile boolean scoreboardTeamNullMember = true;
     public static volatile boolean scoreboardTrackedPlayersRace = true;
     public static volatile boolean movingBlocksDestroyPath = true;
@@ -36,6 +37,8 @@ public final class DatapackOptimizations extends ConfigModule {
             "Evaluate selector option predicates before the implicit alive check.");
         selectorTagIndex = globalConfig.getBoolean("tintedpaper.datapacks.selector-tag-index", true,
             "Serve @e[tag=...] selectors without a distance or box from a per-level index of tagged entities instead of scanning every entity. Every candidate is still checked by the full selector.");
+        selectorPredicateLookup = globalConfig.getBoolean("tintedpaper.datapacks.selector-predicate-lookup", true,
+            "Reuse predicate holder lookups per selector and registry generation; entity tests and loot contexts remain live.");
         scoreboardTeamNullMember = globalConfig.getBoolean("tintedpaper.fixes.scoreboard-team-null-member", true,
             "Omit invalid null team members when saving the scoreboard.");
         scoreboardTrackedPlayersRace = globalConfig.getBoolean("tintedpaper.fixes.scoreboard-tracked-players-race", true,

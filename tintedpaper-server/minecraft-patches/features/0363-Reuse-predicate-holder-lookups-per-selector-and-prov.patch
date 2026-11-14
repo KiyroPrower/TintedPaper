@@ -1,0 +1,25 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 14:04:12 -0300
+Subject: [PATCH] Reuse predicate-holder lookups per selector and provider
+ identity
+
+Native port of the datapack predicate lookup optimization. Retain mapping the live holder value, all per-entity contexts, random consumption, inversion and cycle tracking. The bounded helper stores one immutable snapshot per selector instead of an unbounded global memo map.
+
+diff --git a/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java b/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
+index 935018b44876a8131f4905167ce5409260c420d3..b530aae7ecd25d003c3b5862b43234835ea8bedc 100644
+--- a/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
++++ b/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
+@@ -492,10 +492,11 @@ public class EntitySelectorOptions {
+                     parser.tintedDisableTagIndex(); // TintedPaper - loot predicates can consume random state, even for entities without the requested tag
+                     boolean inverted = parser.shouldInvertValue();
+                     ResourceKey<LootItemCondition> id = ResourceKey.create(Registries.PREDICATE, Identifier.read(parser.getReader()));
++                    final var lookup = new org.dreeam.leaf.util.selector.SelectorPredicateLookup(id);
+                     parser.addPredicate(
+                         entity -> {
+                             if (entity.level() instanceof ServerLevel level) {
+-                                Optional<LootItemCondition> condition = level.getServer().reloadableRegistries().lookup().get(id).map(Holder::value);
++                                Optional<LootItemCondition> condition = lookup.get(level.getServer().reloadableRegistries().lookup()).map(Holder::value);
+                                 if (condition.isEmpty()) {
+                                     return false;
+                                 }

@@ -11,10 +11,10 @@ This is an incomplete migration, not a replacement release for DPO.
 
 | Active injections | Decision |
 | --- | --- |
-| 24 | Native behaviour implemented and local regression suite passed |
+| 25 | Native behaviour implemented and local regression suite passed |
 | 36 | Equivalent mechanism verified in the pinned TintedPaper/Paper baseline |
 | 6 | Removed 26.2 noise pipeline or DivineMC-only implementation |
-| 391 | Native target found; semantic comparison still pending |
+| 390 | Native target found; semantic comparison still pending |
 | 1 | External target still needs source resolution |
 
 The source manifests contain 458 active injections. Matching a target file is
@@ -43,6 +43,11 @@ decision entries fail rather than disappearing from the inventory.
   otherwise. The index remains current when its query toggle is disabled.
   Selectors with `predicate=` retain the native scan, since loot predicates can
   consume random state even for entities that do not have the requested tag.
+- `predicate=` selectors reuse only their holder lookup in a bounded per-selector
+  snapshot keyed by registry provider identity. Reloads invalidate missing and
+  present results; holder values remain live. Every entity still receives its
+  own loot context, random draws, cycle tracking and condition evaluation.
+  `tintedpaper.datapacks.selector-predicate-lookup` defaults to true.
 - Team saves omit invalid null members while retaining valid members and leaving
   the live team untouched. Normal saves still use the native fast path.
 - Tracked scoreboard holders are collected without relying on the fastutil size
