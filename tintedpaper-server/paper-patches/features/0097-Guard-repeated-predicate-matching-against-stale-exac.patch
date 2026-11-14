@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 23:59:10 -0300
+Subject: [PATCH] Guard repeated predicate matching against stale exact
+ ingredient counts
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineShapelessGuardTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineShapelessGuardTest.java
+index 44b06a887696c2e0161809f6508160594c09ed4d..380021f8bcf176bcea7755325317cecdee15af16 100644
+--- a/src/test/java/org/bukkit/craftbukkit/tinted/DivineShapelessGuardTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineShapelessGuardTest.java
+@@ -38,6 +38,20 @@ class DivineShapelessGuardTest {
+         verifyAssignments(ingredient);
+     }
+ 
++    @Test
++    void repeatedPredicateMatchingCannotCreateAnExtraIngredient() {
++        ItemStack named = special();
++        var input = CraftingInput.of(2, 1, List.of(named, new ItemStack(Items.STONE)));
++        Ingredient restricted = Ingredient.ofStacks(List.of(named));
++        restricted.stackPredicate = stack -> stack.is(Items.STONE) && stack.has(DataComponents.CUSTOM_NAME);
++        var oneRestricted = recipe(true, Ingredient.of(Items.STONE), restricted);
++        var twoRestricted = recipe(true, restricted, restricted);
++        for (int repeat = 0; repeat < 8; repeat++) {
++            assertTrue(oneRestricted.matches(input, null));
++            assertFalse(twoRestricted.matches(input, null), "Only one grid slot contains a named ingredient");
++        }
++    }
++
+     @Test
+     void failingPredicateRestoresTheReusableInputAccounting() {
+         ItemStack named = special();
