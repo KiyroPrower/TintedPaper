@@ -4,8 +4,8 @@
   "meaning": "Complete path inventory of active patch trees and module-owned src files at the recorded commit; filenames and pending status are not semantic verification or a claim that every supporting file needs copying. Historical removed patches and Git/build caches are excluded.",
   "counts": {
     "patches": 150,
-    "patchesWithDecision": 49,
-    "patchesPendingReview": 101,
+    "patchesWithDecision": 80,
+    "patchesPendingReview": 70,
     "supportingSourceAndResourceFiles": 258
   },
   "patches": [
@@ -87,7 +87,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0008-lithium-fast_util.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0009-C2ME-Optimize-world-gen-math.patch",
@@ -95,11 +95,11 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0010-Async-locate-command.patch",
-      "status": "pending-review"
+      "status": "deferred"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0011-Carpet-Fixes-RecipeManager-Optimize.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0012-Disable-leaf-decay.patch",
@@ -107,7 +107,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0013-Optimize-entities.patch",
-      "status": "pending-review"
+      "status": "not-ported"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0014-SparklyPaper-Skip-distanceToSqr-call-in-ServerEntity.patch",
@@ -123,7 +123,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0017-ModernFix-compact_bit_storage.patch",
-      "status": "pending-review"
+      "status": "not-ported"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0018-Option-to-disable-disconnect.spam.patch",
@@ -147,7 +147,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0023-Configurable-movement-speed-for-entities.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0024-Option-to-allow-weird-movement-and-disable-teleporti.patch",
@@ -155,7 +155,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0025-Optimize-Raids.patch",
-      "status": "pending-review"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0026-Optimize-VarInt-and-VarLong-write.patch",
@@ -171,23 +171,23 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0029-Implement-NoChatReports.patch",
-      "status": "pending-review"
+      "status": "deferred"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0030-Lag-compensation.patch",
-      "status": "pending-review"
+      "status": "deferred"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0031-Virtual-Threads.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0032-Async-Chunk-Sending.patch",
-      "status": "pending-review"
+      "status": "deferred"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0033-Command-block-parse-results-caching.patch",
-      "status": "pending-review"
+      "status": "not-ported"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0034-Player-ProfileResult-caching.patch",
@@ -195,23 +195,23 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0035-Implement-Secure-Seed.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0036-Dynamic-Activation-of-Brain.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0037-Petal-Async-Pathfinding.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0038-Parallel-entity-tracker.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0039-Pufferfish-Optimize-mob-spawning.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0040-Pufferfish-Simpler-ShapelessRecipes-comparison-for-V.patch",
@@ -219,11 +219,11 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0041-Clump-experience-orbs.patch",
-      "status": "pending-review"
+      "status": "not-ported"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0042-SparklyPaper-Parallel-world-ticking.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0043-MSPT-Tracking-for-each-world.patch",
@@ -231,11 +231,11 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0044-Catch-update-suppressors.patch",
-      "status": "pending-review"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0045-Regionized-Chunk-Ticking.patch",
-      "status": "pending-review"
+      "status": "not-ported"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0046-C2ME-Limit-NBT-cache.patch",
@@ -255,15 +255,15 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0050-Leaves-Protocol-Core.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0051-Paper-PR-Optimise-non-flush-packet-sending.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0052-Linear-region-file-format.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0053-Cleanup-dead-code-from-Paper.patch",
@@ -275,7 +275,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0055-Do-not-send-spectator-change-packet.patch",
-      "status": "pending-review"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0056-Paper-PR-Fire-ServerListPingEvent-for-secondary-motd.patch",
@@ -287,7 +287,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0058-Optimize-Moonrise.patch",
-      "status": "pending-review"
+      "status": "deferred"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0059-lithium-combined_heightmap_update.patch",
@@ -295,11 +295,11 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0060-lithium-sleeping_block_entity.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0061-lithium-equipment_tracking.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0062-Configurable-Files-Locations.patch",
@@ -319,15 +319,15 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0066-C2ME-native-math-optimization.patch",
-      "status": "pending-review"
+      "status": "deferred"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0067-Parallel-sensor-phase.patch",
-      "status": "pending-review"
+      "status": "deferred"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0068-Raytrace-Entity-Culling.patch",
-      "status": "pending-review"
+      "status": "deferred"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0069-Fix-MC-73719.patch",

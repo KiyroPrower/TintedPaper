@@ -1,0 +1,237 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sodium <sodium@kiyro.dev>
+Date: Sat, 14 Nov 2026 09:05:40 -0300
+Subject: [PATCH] Port DivineMC spectator packet hiding, update suppressor
+ crash fix and raid banner cache
+
+
+diff --git a/net/minecraft/network/PacketProcessor.java b/net/minecraft/network/PacketProcessor.java
+index 0cb104f0144f110b58645dcd64c0cd6f0bdadf93..6c8522e160a8a867bd55fccd10cf675e191211eb 100644
+--- a/net/minecraft/network/PacketProcessor.java
++++ b/net/minecraft/network/PacketProcessor.java
+@@ -75,6 +75,14 @@ public class PacketProcessor implements AutoCloseable {
+             if (this.listener.shouldHandleMessage(this.packet)) {
+                 try {
+                     this.packet.handle(this.listener);
++                // TintedPaper start - DivineMC: Catch update suppressors
++                } catch (org.dreeam.leaf.util.UpdateSuppressorException e) {
++                    if (!org.dreeam.leaf.config.modules.fixes.UpdateSuppression.crashFix) {
++                        this.listener.onPacketError(this.packet, e);
++                    } else {
++                        LOGGER.info(e.getMessage());
++                    }
++                // TintedPaper end - DivineMC: Catch update suppressors
+                 } catch (Exception e) {
+                     if (e instanceof ReportedException re && re.getCause() instanceof OutOfMemoryError) {
+                         throw PacketUtils.makeReportedException(e, this.packet, this.listener);
+diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
+index 1762520cf455b304a3f34aec73d46bdf1dd3ca67..dacc1a6af8c3cd2b1fb8fe845f1848bc08249248 100644
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -1853,6 +1853,13 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+             level.tickTimes10s.add(this.tickCount, lastLevelTickTime);
+             level.tickTimes1m.add(this.tickCount, lastLevelTickTime);
+             // SparklyPaper end - track world's MSPT
++        // TintedPaper start - DivineMC: Catch update suppressors
++        } catch (org.dreeam.leaf.util.UpdateSuppressorException e) {
++            if (!org.dreeam.leaf.config.modules.fixes.UpdateSuppression.crashFix) {
++                throw e;
++            }
++            LOGGER.info(e.getMessage());
++        // TintedPaper end - DivineMC: Catch update suppressors
+         } catch (Throwable t) {
+             CrashReport report = CrashReport.forThrowable(t, "Exception ticking world");
+             level.fillReportDetails(report);
+diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
+index 7c73f5373d741c5703fff7f5e6eb66d6916b6d8f..8b717508ae6e2edc00f8271e50401b74dc465192 100644
+--- a/net/minecraft/server/level/ServerLevel.java
++++ b/net/minecraft/server/level/ServerLevel.java
+@@ -245,6 +245,7 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
+     public final org.bukkit.craftbukkit.persistence.CraftPersistentDataContainer persistentDataContainer = new org.bukkit.craftbukkit.persistence.CraftPersistentDataContainer(DATA_TYPE_REGISTRY);
+     private final alternate.current.wire.WireHandler wireHandler = new alternate.current.wire.WireHandler(this); // Paper - optimize redstone (Alternate Current)
+     public boolean hasRidableMoveEvent = false; // Purpur - Ridables
++    public net.minecraft.world.item.ItemStack ominousBanner; // TintedPaper - DivineMC: Optimize Raids
+     public final org.dreeam.leaf.async.tracker.AsyncTracker leaf$asyncTracker = new org.dreeam.leaf.async.tracker.AsyncTracker(); // Leaf - Multithreaded tracker
+     private @Nullable WorldBorder worldBorder; // Leaf - Cache world border
+ 
+diff --git a/net/minecraft/server/level/ServerPlayerGameMode.java b/net/minecraft/server/level/ServerPlayerGameMode.java
+index d159acf35982ca4a5f874d79b851218f1c683d07..64074f26eb63e5da55fec6b22de59ed7ce7f6168 100644
+--- a/net/minecraft/server/level/ServerPlayerGameMode.java
++++ b/net/minecraft/server/level/ServerPlayerGameMode.java
+@@ -91,6 +91,12 @@ public class ServerPlayerGameMode {
+         }
+ 
+         this.player.onUpdateAbilities();
++        // TintedPaper start - DivineMC: Do not send spectator change packet
++        if (org.dreeam.leaf.config.modules.network.SpectatorPackets.hideSpectatorGameMode) {
++            org.dreeam.leaf.util.SpectatorFilter.broadcastGameMode(this.level.getServer().getPlayerList(), this.player,
++                new ClientboundPlayerInfoUpdatePacket(ClientboundPlayerInfoUpdatePacket.Action.UPDATE_GAME_MODE, this.player));
++        } else
++        // TintedPaper end - DivineMC: Do not send spectator change packet
+         this.level
+             .getServer()
+             .getPlayerList()
+diff --git a/net/minecraft/server/players/PlayerList.java b/net/minecraft/server/players/PlayerList.java
+index 85b9426797a329f21dc3952cb1f961c1fbc37bad..80b7b849f47f37e6a645bfd859938ad03d761d5a 100644
+--- a/net/minecraft/server/players/PlayerList.java
++++ b/net/minecraft/server/players/PlayerList.java
+@@ -272,6 +272,7 @@ public abstract class PlayerList {
+ 
+         // CraftBukkit start - sendAll above replaced with this loop
+         ClientboundPlayerInfoUpdatePacket packet = ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player)); // Paper - Add Listing API for Player
++        ClientboundPlayerInfoUpdatePacket othersPacket = org.dreeam.leaf.util.SpectatorFilter.hide(packet); // TintedPaper - DivineMC: Do not send spectator change packet
+ 
+         final List<ServerPlayer> onlinePlayers = Lists.newArrayListWithExpectedSize(this.players.size() - 1); // Paper - Use single player info update packet on join
+         for (int i = 0; i < this.players.size(); ++i) {
+@@ -281,7 +282,7 @@ public abstract class PlayerList {
+                 // Paper start - Add Listing API for Player
+                 if (entityplayer1.getBukkitEntity().isListed(bukkitPlayer)) {
+                     // Paper end - Add Listing API for Player
+-                    entityplayer1.connection.send(packet);
++                    entityplayer1.connection.send(entityplayer1 == player ? packet : othersPacket); // TintedPaper - DivineMC: Do not send spectator change packet
+                     // Paper start - Add Listing API for Player
+                 } else {
+                     entityplayer1.connection.send(ClientboundPlayerInfoUpdatePacket.createSinglePlayerInitializing(player, false));
+@@ -297,7 +298,7 @@ public abstract class PlayerList {
+         }
+         // Paper start - Use single player info update packet on join
+         if (!onlinePlayers.isEmpty()) {
+-            player.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(onlinePlayers, player)); // Paper - Add Listing API for Player
++            player.connection.send(org.dreeam.leaf.util.SpectatorFilter.hide(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(onlinePlayers, player))); // Paper - Add Listing API for Player // TintedPaper - DivineMC: Do not send spectator change packet
+         }
+         // Paper end - Use single player info update packet on join
+         player.sentListPacket = true;
+diff --git a/net/minecraft/world/entity/raid/Raid.java b/net/minecraft/world/entity/raid/Raid.java
+index 185559a9bcc0be2a1c33aa2c9f8c5466d4802423..83eb99bd174e2103c354d28fd16a0c641af0f3f0 100644
+--- a/net/minecraft/world/entity/raid/Raid.java
++++ b/net/minecraft/world/entity/raid/Raid.java
+@@ -699,6 +699,21 @@ public class Raid {
+         return getOminousBannerTemplate(patternGetter).create();
+     }
+ 
++    // TintedPaper start - DivineMC: Optimize Raids
++    /** A shared ominous banner for comparisons only; the stack must never be given to an entity or changed. */
++    public static ItemStack ominousBannerForComparison(final net.minecraft.world.level.Level level) {
++        if (level instanceof ServerLevel serverLevel) {
++            ItemStack banner = serverLevel.ominousBanner;
++            if (banner == null) {
++                banner = getOminousBannerInstance(level.registryAccess().lookupOrThrow(Registries.BANNER_PATTERN));
++                serverLevel.ominousBanner = banner;
++            }
++            return banner;
++        }
++        return getOminousBannerInstance(level.registryAccess().lookupOrThrow(Registries.BANNER_PATTERN));
++    }
++    // TintedPaper end - DivineMC: Optimize Raids
++
+     public @Nullable Raider getLeader(final int wave) {
+         return this.groupToLeaderMap.get(wave);
+     }
+diff --git a/net/minecraft/world/entity/raid/Raider.java b/net/minecraft/world/entity/raid/Raider.java
+index 3c68ca6a9f2ccb8eb67f1dbb009222324dff7c8d..49000766329105965649a7722123169d42cf5afc 100644
+--- a/net/minecraft/world/entity/raid/Raider.java
++++ b/net/minecraft/world/entity/raid/Raider.java
+@@ -47,7 +47,7 @@ public abstract class Raider extends PatrollingMonster {
+     protected static final EntityDataAccessor<Boolean> IS_CELEBRATING = SynchedEntityData.defineId(Raider.class, EntityDataSerializers.BOOLEAN);
+     private static final Predicate<ItemEntity> ALLOWED_ITEMS = e -> !e.hasPickUpDelay()
+         && e.isAlive()
+-        && ItemStack.matches(e.getItem(), Raid.getOminousBannerInstance(e.registryAccess().lookupOrThrow(Registries.BANNER_PATTERN)));
++        && ItemStack.matches(e.getItem(), Raid.ominousBannerForComparison(e.level())); // TintedPaper - DivineMC: Optimize Raids
+     private static final int DEFAULT_WAVE = 0;
+     private static final boolean DEFAULT_CAN_JOIN_RAID = false;
+     protected @Nullable Raid raid;
+@@ -150,7 +150,7 @@ public abstract class Raider extends PatrollingMonster {
+     public boolean isCaptain() {
+         ItemStack banner = this.getItemBySlot(EquipmentSlot.HEAD);
+         boolean hasCaptainBanner = !banner.isEmpty()
+-            && ItemStack.matches(banner, Raid.getOminousBannerInstance(this.registryAccess().lookupOrThrow(Registries.BANNER_PATTERN)));
++            && ItemStack.matches(banner, Raid.ominousBannerForComparison(this.level())); // TintedPaper - DivineMC: Optimize Raids
+         boolean patrolLeader = this.isPatrolLeader();
+         return hasCaptainBanner && patrolLeader;
+     }
+@@ -213,7 +213,7 @@ public abstract class Raider extends PatrollingMonster {
+         boolean hasRaidLeader = this.hasActiveRaid() && this.getCurrentRaid().getLeader(this.getWave()) != null;
+         if (this.hasActiveRaid()
+             && !hasRaidLeader
+-            && ItemStack.matches(itemStack, Raid.getOminousBannerInstance(this.registryAccess().lookupOrThrow(Registries.BANNER_PATTERN)))) {
++            && ItemStack.matches(itemStack, Raid.ominousBannerForComparison(this.level()))) { // TintedPaper - DivineMC: Optimize Raids
+             // Paper start - EntityPickupItemEvent fixes
+             if (org.bukkit.craftbukkit.event.CraftEventFactory.callEntityPickupItemEvent(this, entity, 0).isCancelled()) {
+                 return;
+@@ -410,7 +410,7 @@ public abstract class Raider extends PatrollingMonster {
+             }
+ 
+             if (ItemStack.matches(
+-                this.mob.getItemBySlot(EquipmentSlot.HEAD), Raid.getOminousBannerInstance(this.mob.registryAccess().lookupOrThrow(Registries.BANNER_PATTERN))
++                this.mob.getItemBySlot(EquipmentSlot.HEAD), Raid.ominousBannerForComparison(this.mob.level()) // TintedPaper - DivineMC: Optimize Raids
+             )) {
+                 return true;
+             }
+diff --git a/net/minecraft/world/level/block/ShulkerBoxBlock.java b/net/minecraft/world/level/block/ShulkerBoxBlock.java
+index 4171e8e9a5b4c52e09ec7e320a0df51dccf16c65..fa0e204fc2c190aa712d258b4aee007d662c87f4 100644
+--- a/net/minecraft/world/level/block/ShulkerBoxBlock.java
++++ b/net/minecraft/world/level/block/ShulkerBoxBlock.java
+@@ -179,7 +179,16 @@ public class ShulkerBoxBlock extends BaseEntityBlock {
+ 
+     @Override
+     protected int getAnalogOutputSignal(final BlockState state, final Level level, final BlockPos pos, final Direction direction) {
+-        return AbstractContainerMenu.getRedstoneSignalFromBlockEntity(level.getBlockEntity(pos));
++        // TintedPaper start - DivineMC: Catch update suppressors
++        try {
++            return AbstractContainerMenu.getRedstoneSignalFromBlockEntity(level.getBlockEntity(pos));
++        } catch (ClassCastException ex) {
++            if (org.dreeam.leaf.config.modules.fixes.UpdateSuppression.crashFix) {
++                throw new org.dreeam.leaf.util.UpdateSuppressorException(pos, this);
++            }
++            throw ex;
++        }
++        // TintedPaper end - DivineMC: Catch update suppressors
+     }
+ 
+     public @Nullable DyeColor getColor() {
+diff --git a/net/minecraft/world/level/redstone/NeighborUpdater.java b/net/minecraft/world/level/redstone/NeighborUpdater.java
+index 10e17c5fca7c6fa1c40035a77bcf0112e3e161c7..70535ced97ea1760bd0d07bc013ab99053d6d5e3 100644
+--- a/net/minecraft/world/level/redstone/NeighborUpdater.java
++++ b/net/minecraft/world/level/redstone/NeighborUpdater.java
+@@ -70,6 +70,12 @@ public interface NeighborUpdater {
+         executeUpdate(level, state, pos, changedBlock, orientation, movedByPiston, pos);
+     }
+ 
++    // TintedPaper start - DivineMC: Catch update suppressors
++    static void suppressUpdate(Level level, BlockPos pos, Block changedBlock) {
++        net.minecraft.server.MinecraftServer.LOGGER.info("Update suppressed at {} in {} by {}", pos.toShortString(), level.dimension().identifier(), changedBlock);
++    }
++    // TintedPaper end - DivineMC: Catch update suppressors
++
+     static void executeUpdate(Level level, BlockState state, BlockPos pos, Block changedBlock, @Nullable Orientation orientation, boolean movedByPiston, BlockPos sourcePos) {
+         // Paper end - Add source block to BlockPhysicsEvent
+         try {
+@@ -86,9 +92,28 @@ public interface NeighborUpdater {
+             state.handleNeighborChanged(level, pos, changedBlock, orientation, movedByPiston);
+             // Spigot start
+         } catch (StackOverflowError ex) {
++            // TintedPaper start - DivineMC: Catch update suppressors
++            if (org.dreeam.leaf.config.modules.fixes.UpdateSuppression.crashFix) {
++                suppressUpdate(level, pos, changedBlock);
++                return;
++            }
++            // TintedPaper end - DivineMC: Catch update suppressors
+             level.lastPhysicsProblem = pos.immutable();
+             // Spigot end
++        // TintedPaper start - DivineMC: Catch update suppressors
++        } catch (org.dreeam.leaf.util.UpdateSuppressorException ex) {
++            if (!org.dreeam.leaf.config.modules.fixes.UpdateSuppression.crashFix) {
++                throw ex;
++            }
++            suppressUpdate(level, pos, changedBlock);
++        // TintedPaper end - DivineMC: Catch update suppressors
+         } catch (Throwable t) {
++            // TintedPaper start - DivineMC: Catch update suppressors
++            if (org.dreeam.leaf.config.modules.fixes.UpdateSuppression.crashFix) {
++                suppressUpdate(level, pos, changedBlock);
++                return;
++            }
++            // TintedPaper end - DivineMC: Catch update suppressors
+             CrashReport report = CrashReport.forThrowable(t, "Exception while updating neighbours");
+             CrashReportCategory category = report.addCategory("Block being updated");
+             category.setDetail(
