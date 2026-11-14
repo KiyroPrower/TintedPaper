@@ -7,7 +7,7 @@ FastNoise was requested twice and is tracked once.
 | Source | Pinned revision | State |
 | --- | --- | --- |
 | [BetterMaps](https://codeberg.org/NerjalNosk/bettermaps) | `a6e7fb7c5c31a1e54ec6ace339d4ca70c71f1488` | Opt-in deferred explorer-map integration implemented; five local regressions passed. Async/dynamic lookup and arbitrary request parameters remain pending. |
-| [Lomka](https://github.com/Starlevka/Lomka) | `5d8bf834d5d3efa783ecad0c3d2fb15a5634550f` | Bulk NBT array reads and large balanced weighted-selector search implemented; six local regressions passed. Other server optimizations pending. |
+| [Lomka](https://github.com/Starlevka/Lomka) | `5d8bf834d5d3efa783ecad0c3d2fb15a5634550f` | NBT array reads, weighted-selector search, enum-set codec and unchanged-position delta implemented. Remaining server mixins reviewed and not ported (see Lomka remaining mixins). Client rendering mixins are out of scope. |
 | [Worldthreader](https://github.com/2No2Name/worldthreader) | `6fbaef2f424d9a81c9d16617f58b58076c5d045c` | Existing parallel world ticking retained. A cache ownership race found during comparison is fixed and regression-tested; see PARALLEL-WORLD-PORT.md. Cross-world exclusivity and remaining compatibility mechanisms are pending. |
 | [UUID-Hex](https://github.com/CJDevZ/UUID-Hex) | `e538db835f6fc56809559be6f4d4c6b8bcee20e1` | Original functions bundled as an optional built-in datapack; three local regressions passed. Live command/storage execution remains untested. |
 | [Explodee](https://github.com/KnownSH/Explodee) | `58b4387177d3c24b434285612b9a5042f81952ff` | Spherical ray distribution implemented inside Moonrise's loop, opt-in and default false. Two local regressions passed. |
@@ -192,3 +192,18 @@ advances its path state, and entities leaving a portal are not moved out of
 blocks. Potatoptimize's `PlayerEntityStatsMixin` is not ported: Gale's interval
 statistics already batch time-based stats in the native source.
 MIT license: Potatoptimize, Tater-Certified.
+
+## Lomka remaining mixins
+
+Ported: `MixinFriendlyByteBuf` enum sets (byte-level read/write, same wire
+format as `writeFixedBitSet`, checked for every subset of a nine-value enum) and
+`MixinVecDeltaCodec` (an unchanged position returns `Vec3.ZERO`).
+
+Not ported, with the reason checked in the native source:
+- `MixinDirect` (`HolderSet.Direct.contains`): the native code already uses a lazy `Set`.
+- `MixinCompressionEncoder`/`Decoder`: the native encoder/decoder already use the Paper libdeflate compressor.
+- `MixinVoxelShape`, `MixinBitSetDiscreteVoxelShape`, `MixinDiscreteVoxelShape`, `MixinAABB`: collision shapes are replaced by Moonrise.
+- `MixinByIdMap`, `MixinCursor3D`, `MixinDirection`, `MixinBlockPos`, `MixinFriendlyByteBuf.writeCollection/IntIdList`: startup-only or negligible gains with no measurement available; each would overwrite a method Paper patches.
+- `MixinPalettedContainer`, `MixinHeightmap`, `MixinLayerLightSectionStorage`, random sources, `Mth`/`Util`/`ARGB`, block state caches, resource pack mixins: not compared against Moonrise/Paper replacements yet; left unported rather than overwritten blindly.
+
+Lomka is LGPL-3.0-only; see `licenses/Lomka-NOTICE.txt`.

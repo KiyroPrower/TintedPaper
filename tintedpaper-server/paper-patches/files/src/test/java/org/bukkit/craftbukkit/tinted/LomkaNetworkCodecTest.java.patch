@@ -1,0 +1,50 @@
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/LomkaNetworkCodecTest.java
+@@ -1,0 +_,47 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.netty.buffer.Unpooled;
++import java.util.BitSet;
++import java.util.EnumSet;
++import net.minecraft.network.FriendlyByteBuf;
++import net.minecraft.network.protocol.game.VecDeltaCodec;
++import net.minecraft.world.phys.Vec3;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++@Normal
++class LomkaNetworkCodecTest {
++    private enum Nine { A, B, C, D, E, F, G, H, I }
++
++    @Test
++    void enumSetsUseTheFixedBitSetWireFormatForEverySubset() {
++        Nine[] values = Nine.values();
++        for (int mask = 0; mask < 1 << values.length; mask++) {
++            EnumSet<Nine> set = EnumSet.noneOf(Nine.class);
++            BitSet bits = new BitSet(values.length);
++            for (int i = 0; i < values.length; i++) {
++                if ((mask >> i & 1) != 0) {
++                    set.add(values[i]);
++                    bits.set(i);
++                }
++            }
++            FriendlyByteBuf actual = new FriendlyByteBuf(Unpooled.buffer());
++            actual.writeEnumSet(set, Nine.class);
++            FriendlyByteBuf expected = new FriendlyByteBuf(Unpooled.buffer());
++            expected.writeFixedBitSet(bits, values.length);
++            assertEquals(expected.readableBytes(), actual.readableBytes());
++            assertEquals(Unpooled.copiedBuffer(expected), Unpooled.copiedBuffer(actual), "wire format, mask " + mask);
++            assertEquals(set, actual.readEnumSet(Nine.class));
++        }
++    }
++
++    @Test
++    void unchangedDeltaIsZeroAndOthersAreSubtractions() {
++        VecDeltaCodec codec = new VecDeltaCodec();
++        codec.setBase(new Vec3(1, 2, 3));
++        assertSame(Vec3.ZERO, codec.delta(new Vec3(1, 2, 3)));
++        assertEquals(new Vec3(1, 0, -3), codec.delta(new Vec3(2, 2, 0)));
++    }
++}
