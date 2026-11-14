@@ -1,0 +1,176 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 00:13:23 -0300
+Subject: [PATCH] Preserve secondary ping cancellation and disconnect lifecycle
+ with shared response building
+
+
+diff --git a/src/main/java/com/destroystokyo/paper/network/StandardPaperServerListPingEventImpl.java b/src/main/java/com/destroystokyo/paper/network/StandardPaperServerListPingEventImpl.java
+index 172e29bee517a594173bc57d7608ab806810da55..3fd27857411f5a88e72a74c797abbfeb525dff71 100644
+--- a/src/main/java/com/destroystokyo/paper/network/StandardPaperServerListPingEventImpl.java
++++ b/src/main/java/com/destroystokyo/paper/network/StandardPaperServerListPingEventImpl.java
+@@ -74,9 +74,13 @@ public final class StandardPaperServerListPingEventImpl extends PaperServerListP
+         connection.send(new ClientboundStatusResponsePacket(ping));
+     }
+ 
+-    public static ServerStatus getEventResponse(MinecraftServer server, Connection connection) {
++    public static @org.jspecify.annotations.Nullable ServerStatus getEventResponse(MinecraftServer server, Connection connection) {
+         // DivineMC end - Paper PR: Fire ServerListPingEvent for secondary motd send
+-        StandardPaperServerListPingEventImpl event = new StandardPaperServerListPingEventImpl(server, connection, server.getStatus());
++        ServerStatus currentStatus = server.getStatus();
++        if (currentStatus == null) {
++            return null;
++        }
++        StandardPaperServerListPingEventImpl event = new StandardPaperServerListPingEventImpl(server, connection, currentStatus);
+         server.server.getPluginManager().callEvent(event);
+ 
+         // Close connection immediately if event is cancelled
+@@ -112,4 +116,18 @@ public final class StandardPaperServerListPingEventImpl extends PaperServerListP
+         return ping; // DivineMC - Paper PR: Fire ServerListPingEvent for secondary motd send
+     }
+ 
++    public static void sendSecondaryResponse(MinecraftServer server, net.minecraft.server.level.ServerPlayer player, Connection connection) {
++        try {
++            io.papermc.paper.util.MCUtil.scheduleAsyncTask(() -> {
++                if (player.hasDisconnected()) return;
++                ServerStatus status = getEventResponse(server, connection);
++                if (status != null && !player.hasDisconnected()) {
++                    player.sendServerStatus(status);
++                }
++            });
++        } catch (java.util.concurrent.RejectedExecutionException shutdown) {
++            // The optional secondary status is skipped when Paper's async executor is shutting down.
++        }
++    }
++
+ }
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineSecondaryStatusTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineSecondaryStatusTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..fd1f8e4d8d8173b8fd9c21b083eb53126823a1fe
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineSecondaryStatusTest.java
+@@ -0,0 +1,124 @@
++package org.bukkit.craftbukkit.tinted;
++
++import com.destroystokyo.paper.event.server.PaperServerListPingEvent;
++import com.destroystokyo.paper.network.StandardPaperServerListPingEventImpl;
++import io.papermc.paper.adventure.PaperAdventure;
++import io.papermc.paper.util.MCUtil;
++import java.util.Optional;
++import java.util.concurrent.RejectedExecutionException;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.concurrent.atomic.AtomicReference;
++import net.minecraft.network.Connection;
++import net.minecraft.network.chat.Component;
++import net.minecraft.network.protocol.status.ClientboundStatusResponsePacket;
++import net.minecraft.network.protocol.status.ServerStatus;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.level.ServerPlayer;
++import org.bukkit.craftbukkit.CraftServer;
++import org.bukkit.event.Event;
++import org.bukkit.plugin.PluginManager;
++import org.bukkit.support.environment.AllFeatures;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.mockito.ArgumentCaptor;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.ArgumentMatchers.*;
++import static org.mockito.Mockito.*;
++
++@AllFeatures
++class DivineSecondaryStatusTest {
++    private MinecraftServer server;
++    private Connection connection;
++    private ServerPlayer player;
++    private PluginManager plugins;
++
++    @BeforeEach
++    void setup() {
++        this.plugins = mock(PluginManager.class);
++        this.server = mock(MinecraftServer.class);
++        this.server.server = mock(CraftServer.class);
++        when(this.server.server.getPluginManager()).thenReturn(this.plugins);
++        when(this.server.motd()).thenReturn(net.kyori.adventure.text.Component.text("original"));
++        when(this.server.getMaxPlayers()).thenReturn(64);
++        when(this.server.getStatus()).thenReturn(new ServerStatus(Component.literal("cached"), Optional.empty(),
++            Optional.of(new ServerStatus.Version("test", 1)), Optional.empty(), false));
++        this.connection = mock(Connection.class);
++        this.player = mock(ServerPlayer.class);
++    }
++
++    @Test
++    void secondaryStatusUsesThePluginMotdWithoutDisconnectingThePlayer() {
++        doAnswer(call -> {
++            PaperServerListPingEvent event = call.getArgument(0);
++            assertTrue(event.isAsynchronous());
++            event.motd(net.kyori.adventure.text.Component.text("personalized"));
++            return null;
++        }).when(this.plugins).callEvent(any(Event.class));
++        try (var async = mockStatic(MCUtil.class)) {
++            async.when(() -> MCUtil.scheduleAsyncTask(any())).thenAnswer(call -> { call.<Runnable>getArgument(0).run(); return null; });
++            StandardPaperServerListPingEventImpl.sendSecondaryResponse(this.server, this.player, this.connection);
++        }
++        var status = ArgumentCaptor.forClass(ServerStatus.class);
++        verify(this.player).sendServerStatus(status.capture());
++        assertEquals(net.kyori.adventure.text.Component.text("personalized"), PaperAdventure.asAdventure(status.getValue().description()));
++        verify(this.connection, never()).disconnect((Component) null);
++    }
++
++    @Test
++    void cancellationDropsTheSecondaryResponseAndStillClosesAPrimaryPing() {
++        doAnswer(call -> { ((PaperServerListPingEvent) call.getArgument(0)).setCancelled(true); return null; })
++            .when(this.plugins).callEvent(any(Event.class));
++        try (var async = mockStatic(MCUtil.class)) {
++            async.when(() -> MCUtil.scheduleAsyncTask(any())).thenAnswer(call -> { call.<Runnable>getArgument(0).run(); return null; });
++            StandardPaperServerListPingEventImpl.sendSecondaryResponse(this.server, this.player, this.connection);
++        }
++        verify(this.player, never()).sendServerStatus(any());
++        verify(this.connection, never()).disconnect((Component) null);
++        StandardPaperServerListPingEventImpl.processRequest(this.server, this.connection);
++        verify(this.connection).disconnect((Component) null);
++        verify(this.connection, never()).send(any(ClientboundStatusResponsePacket.class));
++    }
++
++    @Test
++    void disconnectedQueuedPlayerDoesNotDispatchAnEvent() {
++        var queued = new AtomicReference<Runnable>();
++        try (var async = mockStatic(MCUtil.class)) {
++            async.when(() -> MCUtil.scheduleAsyncTask(any())).thenAnswer(call -> { queued.set(call.getArgument(0)); return null; });
++            StandardPaperServerListPingEventImpl.sendSecondaryResponse(this.server, this.player, this.connection);
++        }
++        when(this.player.hasDisconnected()).thenReturn(true);
++        queued.get().run();
++        verifyNoInteractions(this.plugins);
++        verify(this.player, never()).sendServerStatus(any());
++    }
++
++    @Test
++    void aDisconnectDuringTheListenerPreventsTheResponse() {
++        var disconnected = new AtomicBoolean();
++        when(this.player.hasDisconnected()).thenAnswer(call -> disconnected.get());
++        doAnswer(call -> { disconnected.set(true); return null; }).when(this.plugins).callEvent(any(Event.class));
++        try (var async = mockStatic(MCUtil.class)) {
++            async.when(() -> MCUtil.scheduleAsyncTask(any())).thenAnswer(call -> { call.<Runnable>getArgument(0).run(); return null; });
++            StandardPaperServerListPingEventImpl.sendSecondaryResponse(this.server, this.player, this.connection);
++        }
++        verify(this.plugins).callEvent(any(Event.class));
++        verify(this.player, never()).sendServerStatus(any());
++    }
++
++    @Test
++    void absentCachedStatusDoesNotDispatchAnEvent() {
++        when(this.server.getStatus()).thenReturn(null);
++        assertNull(StandardPaperServerListPingEventImpl.getEventResponse(this.server, this.connection));
++        verifyNoInteractions(this.plugins);
++    }
++
++    @Test
++    void executorShutdownSkipsOnlyTheOptionalStatus() {
++        try (var async = mockStatic(MCUtil.class)) {
++            async.when(() -> MCUtil.scheduleAsyncTask(any())).thenThrow(new RejectedExecutionException("shutdown"));
++            assertDoesNotThrow(() -> StandardPaperServerListPingEventImpl.sendSecondaryResponse(this.server, this.player, this.connection));
++        }
++        verifyNoInteractions(this.plugins, this.player);
++    }
++}

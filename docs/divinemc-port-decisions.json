@@ -241,6 +241,18 @@
       "status": "covered-by-base",
       "reason": "The inherited Gale/Velocity writers already pack the same 1-5 VarInt and 1-10 VarLong encodings into byte/short/medium/int operations, including negative values. Keep the existing branch ladder and original reference writers rather than replace it with DivineMC's byte-size switch.",
       "evidence": ["tintedpaper-server/minecraft-patches/features/0073-Optimize-VarInt-write-and-VarLong-write.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/network/VarInt.java", "tintedpaper-server/src/minecraft/java/net/minecraft/network/VarLong.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0056-Paper-PR-Fire-ServerListPingEvent-for-secondary-motd.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Non-transferred logins asynchronously build the secondary server-data response through the existing Paper server-list ping event. Reuse Paper's async executor and its existing shutdown lifecycle. Check disconnect state before dispatch and again after plugin listeners, and skip only the optional secondary status if shutdown rejects scheduling. No world work is moved to a worker.",
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/server/players/PlayerList.java", "paper-server/src/main/java/com/destroystokyo/paper/network/StandardPaperServerListPingEventImpl.java", "paper-server/src/main/java/io/papermc/paper/util/MCUtil.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineSecondaryStatusTest.java"]
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0017-Paper-PR-Fire-ServerListPingEvent-for-secondary-motd.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Share event response construction between primary server-list pings and secondary login MOTD delivery. A cancelled primary ping still disconnects its status connection; a cancelled secondary event only suppresses that response. Guard an absent cached status instead of dereferencing it. Six regressions cover plugin MOTD edits, cancellation, pre/post-listener disconnects, missing status and executor rejection.",
+      "evidence": ["paper-server/src/main/java/com/destroystokyo/paper/network/StandardPaperServerListPingEventImpl.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineSecondaryStatusTest.java"]
     }
   ],
   "compatibilityFixes": [
