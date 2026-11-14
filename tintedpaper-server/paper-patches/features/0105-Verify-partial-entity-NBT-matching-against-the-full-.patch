@@ -1,0 +1,138 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sodium <sodium@kiyro.dev>
+Date: Sat, 14 Nov 2026 09:37:28 -0300
+Subject: [PATCH] Verify partial entity NBT matching against the full
+ serialization
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackNbtPartialTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackNbtPartialTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..6ab754232a27220fed622fd4708ca57272ad6b67
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackNbtPartialTest.java
+@@ -0,0 +1,125 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.papermc.paper.configuration.WorldConfiguration;
++import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
++import java.util.UUID;
++import net.minecraft.advancements.predicates.NbtPredicate;
++import net.minecraft.core.RegistryAccess;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.NbtUtils;
++import net.minecraft.nbt.TagParser;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.Marker;
++import net.minecraft.world.level.Level;
++import org.bukkit.craftbukkit.CraftWorld;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.opt.NbtPartial;
++import org.dreeam.leaf.util.nbt.NbtPartialMatcher;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.Test;
++import org.purpurmc.purpur.PurpurWorldConfig;
++import org.spigotmc.SpigotWorldConfig;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DatapackNbtPartialTest {
++    private final boolean enabled = NbtPartial.enabled;
++    private final int samples = NbtPartial.verifySamples;
++
++    @AfterEach
++    void restore() {
++        NbtPartial.enabled = this.enabled;
++        NbtPartial.verifySamples = this.samples;
++        NbtPartial.disabledByMismatch.set(false);
++        NbtPartial.verified.set(0);
++    }
++
++    private static CompoundTag compare(String snbt) throws Exception {
++        return TagParser.parseCompoundFully(snbt);
++    }
++
++    private static boolean full(Marker entity, CompoundTag compare) {
++        return NbtUtils.compareNbt(compare, NbtPredicate.getEntityTagToCompare(entity), true);
++    }
++
++    @Test
++    void partialMatchingAgreesWithTheFullSerializationForEveryKind() throws Exception {
++        Marker entity = entity();
++        entity.addTag("a");
++        entity.addTag("b");
++        String[] compares = {
++            "{Tags:[\"a\"]}", "{Tags:[\"missing\"]}", "{Tags:[\"a\",\"b\"]}", "{Invulnerable:0b}", "{Invulnerable:1b}",
++            "{Air:300s}", "{Pos:[0.0d,0.0d,0.0d]}", "{Pos:[1.0d,0.0d,0.0d]}", "{NoSuchKey:1b}", "{Tags:[\"a\"],Invulnerable:0b}",
++            "{Tags:[\"a\"],Invulnerable:1b}", "{data:{}}", "{Item:{id:\"minecraft:stone\"}}"
++        };
++        NbtPartial.verifySamples = 0;
++        for (String snbt : compares) {
++            CompoundTag compare = compare(snbt);
++            Boolean partial = NbtPartialMatcher.tryPartialMatch(entity, compare);
++            assertNotNull(partial, snbt);
++            assertEquals(full(entity, compare), partial, "partial and full serialization must agree for " + snbt);
++        }
++    }
++
++    @Test
++    void filteredTagHoldsEveryKeyTheCompareNamesAndNothingElse() throws Exception {
++        Marker entity = entity();
++        entity.addTag("a");
++        CompoundTag compare = compare("{Tags:[\"a\"],Invulnerable:0b}");
++        CompoundTag filtered = NbtPartialMatcher.buildFilteredCompare(entity, compare, false);
++        CompoundTag fullTag = NbtPredicate.getEntityTagToCompare(entity);
++        assertEquals(fullTag.get("Tags"), filtered.get("Tags"));
++        assertEquals(fullTag.get("Invulnerable"), filtered.get("Invulnerable"));
++        assertFalse(filtered.contains("Pos"), "keys the compare does not name are not serialized");
++        assertFalse(filtered.contains("Air"));
++        assertTrue(fullTag.contains("Pos"));
++    }
++
++    @Test
++    void disabledOrEmptyCompareFallsBackToTheVanillaPath() throws Exception {
++        Marker entity = entity();
++        NbtPartial.enabled = false;
++        assertNull(NbtPartialMatcher.tryPartialMatch(entity, compare("{Tags:[\"a\"]}")));
++        NbtPartial.enabled = true;
++        assertNull(NbtPartialMatcher.tryPartialMatch(entity, new CompoundTag()), "an empty compare tag always matches natively");
++        assertNull(NbtPartialMatcher.tryPartialMatch(null, compare("{Air:300s}")));
++        NbtPartial.disabledByMismatch.set(true);
++        assertNull(NbtPartialMatcher.tryPartialMatch(entity, compare("{Air:300s}")));
++    }
++
++    @Test
++    void verificationCountsSamplesAndStopsWhenTheBudgetIsSpent() throws Exception {
++        Marker entity = entity();
++        NbtPartial.verifySamples = 2;
++        NbtPartial.verified.set(0);
++        for (int i = 0; i < 5; i++) {
++            assertNotNull(NbtPartialMatcher.tryPartialMatch(entity, compare("{Air:300s}")));
++        }
++        assertEquals(2, NbtPartial.verified.get());
++        assertFalse(NbtPartial.disabledByMismatch.get());
++    }
++
++    private static Marker entity() throws Exception {
++        ServerLevel level = mock(ServerLevel.class);
++        var purpurConfig = Level.class.getField("purpurConfig");
++        purpurConfig.setAccessible(true);
++        purpurConfig.set(level, mock(PurpurWorldConfig.class));
++        var spigotConfig = Level.class.getField("spigotConfig");
++        spigotConfig.setAccessible(true);
++        spigotConfig.set(level, mock(SpigotWorldConfig.class));
++        WorldConfiguration config = mock(WorldConfiguration.class);
++        config.entities = mock(WorldConfiguration.Entities.class);
++        config.entities.spawning = mock(WorldConfiguration.Entities.Spawning.class);
++        config.entities.spawning.despawnTime = new Reference2ObjectOpenHashMap<>();
++        when(level.paperConfig()).thenReturn(config);
++        when(level.getNextEntityId()).thenReturn(1);
++        when(level.registryAccess()).thenReturn(RegistryAccess.EMPTY);
++        CraftWorld world = mock(CraftWorld.class);
++        when(world.getUID()).thenReturn(new UUID(1, 2));
++        when(level.getWorld()).thenReturn(world);
++        return new Marker(EntityTypes.MARKER, level);
++    }
++}

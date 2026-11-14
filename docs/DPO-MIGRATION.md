@@ -11,10 +11,10 @@ This is an incomplete migration, not a replacement release for DPO.
 
 | Active injections | Decision |
 | --- | --- |
-| 16 | Native behaviour implemented and local regression suite passed |
+| 19 | Native behaviour implemented and local regression suite passed |
 | 36 | Equivalent mechanism verified in the pinned TintedPaper/Paper baseline |
 | 6 | Removed 26.2 noise pipeline or DivineMC-only implementation |
-| 399 | Native target found; semantic comparison still pending |
+| 396 | Native target found; semantic comparison still pending |
 | 1 | External target still needs source resolution |
 
 The source manifests contain 458 active injections. Matching a target file is
@@ -51,6 +51,11 @@ decision entries fail rather than disappearing from the inventory.
   absent from the registry. Known tags retain the native representation.
 - The implicit selector alive predicate is retained and evaluated after the option
   predicates. It is never removed from the completed predicate list.
+- Entity NBT comparisons serialize only the top-level keys they name: `@e[nbt=]`, entity
+  predicates (advancements, loot conditions and `predicate=`) and `NbtPredicate.matches(Entity)`.
+  Matching still runs `NbtUtils.compareNbt` on the filtered tag. `NbtPredicate.matches` checks its
+  first 500 results against the full serialization and stops filtering on the first difference
+  (`tintedpaper.datapacks.nbt-partial.*`). The `/data get` path-scoped variant is still pending.
 - Dirt paths check a piston's carried block, retaining the native solid-block and
   fence-gate rules. Missing piston block entities retain the original fallback.
 - Cube shapes reuse three immutable coordinate ranges, initialized before the
