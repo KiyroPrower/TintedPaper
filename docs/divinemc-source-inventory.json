@@ -4,8 +4,8 @@
   "meaning": "Complete path inventory of active patch trees and module-owned src files at the recorded commit; filenames and pending status are not semantic verification or a claim that every supporting file needs copying. Historical removed patches and Git/build caches are excluded.",
   "counts": {
     "patches": 150,
-    "patchesWithDecision": 38,
-    "patchesPendingReview": 112,
+    "patchesWithDecision": 39,
+    "patchesPendingReview": 111,
     "supportingSourceAndResourceFiles": 258
   },
   "patches": [
@@ -23,7 +23,7 @@
     },
     {
       "source": "divinemc-api/paper-patches/features/0003-Delete-ReloadCommand.patch",
-      "status": "requires-compatibility-adaptation"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-api/paper-patches/features/0004-Expanded-Adventure-support.patch",
@@ -491,7 +491,7 @@
     },
     {
       "source": "divinemc-server/paper-patches/features/0004-Delete-ReloadCommand.patch",
-      "status": "pending-review"
+      "status": "unnecessary-after-compatible-port"
     },
     {
       "source": "divinemc-server/paper-patches/features/0005-Paper-PR-Add-FillBottleEvents-for-player-and-dispens.patch",
