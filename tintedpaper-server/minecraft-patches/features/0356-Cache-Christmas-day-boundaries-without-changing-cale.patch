@@ -1,0 +1,38 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 12:52:38 -0300
+Subject: [PATCH] Cache Christmas day boundaries without changing calendar
+ semantics
+
+Independent native adaptation of Potatoptimize holiday caching (QPCrummer, MIT). Use immutable publication and timezone/clock-rewind-aware day bounds rather than future-year prediction.
+
+diff --git a/net/minecraft/util/SpecialDates.java b/net/minecraft/util/SpecialDates.java
+index 5d663a3b26de7eac1bfd25245b0cadb60d721264..05e681b6b3362f2d47f940825bdd3fdd0ea9fea5 100644
+--- a/net/minecraft/util/SpecialDates.java
++++ b/net/minecraft/util/SpecialDates.java
+@@ -68,6 +68,24 @@ public class SpecialDates {
+     }
+ 
+     public static boolean isExtendedChristmas() {
+-        return CHRISTMAS_RANGE.contains(dayNow());
++        return tintedIsExtendedChristmas(System.currentTimeMillis(), java.time.ZoneId.systemDefault());
++    }
++
++    // TintedPaper - Potatoptimize's Christmas caching, retaining native timezone and clock-change behavior.
++    private static volatile ChristmasCache tintedChristmasCache;
++
++    private static boolean tintedIsExtendedChristmas(final long now, final java.time.ZoneId zone) {
++        ChristmasCache cached = tintedChristmasCache;
++        if (cached != null && cached.zone().equals(zone) && now >= cached.start() && now < cached.end()) {
++            return cached.christmas();
++        }
++        java.time.LocalDate day = java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
++        boolean christmas = CHRISTMAS_RANGE.contains(MonthDay.from(day));
++        tintedChristmasCache = new ChristmasCache(zone, day.atStartOfDay(zone).toInstant().toEpochMilli(),
++            day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(), christmas);
++        return christmas;
++    }
++
++    private record ChristmasCache(java.time.ZoneId zone, long start, long end, boolean christmas) {
+     }
+ }

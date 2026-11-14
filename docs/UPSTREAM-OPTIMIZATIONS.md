@@ -10,8 +10,8 @@ FastNoise was requested twice and is tracked once.
 | [Lomka](https://github.com/Starlevka/Lomka) | `5d8bf834d5d3efa783ecad0c3d2fb15a5634550f` | Bulk NBT array stream reads implemented; four local regression tests passed. Other server optimizations pending. |
 | [Worldthreader](https://github.com/2No2Name/worldthreader) | `6fbaef2f424d9a81c9d16617f58b58076c5d045c` | Existing parallel world ticking retained. Cross-world ownership and compatibility mechanisms still need comparison. |
 | [UUID-Hex](https://github.com/CJDevZ/UUID-Hex) | `e538db835f6fc56809559be6f4d4c6b8bcee20e1` | Datapack function/storage API integration pending. |
-| [Explodee](https://github.com/KnownSH/Explodee) | `58b4387177d3c24b434285612b9a5042f81952ff` | Spherical explosion rays pending an opt-in adaptation inside the existing Moonrise explosion loop. |
-| [Potatoptimize](https://github.com/Tater-Certified/Potatoptimize) | `cc66d31103eba2e0e24d47a46d0bbc313e686b23` | Sign ticking removal/editor validation already present in CraftBukkit. Other features pending comparison. |
+| [Explodee](https://github.com/KnownSH/Explodee) | `58b4387177d3c24b434285612b9a5042f81952ff` | Spherical ray distribution implemented inside Moonrise's loop, opt-in and default false. Two local regressions passed. |
+| [Potatoptimize](https://github.com/Tater-Certified/Potatoptimize) | `cc66d31103eba2e0e24d47a46d0bbc313e686b23` | Sign ticking/editor validation and Halloween caching already present. Christmas caching implemented with two local regressions. Slime, navigation, portals and stat policies remain pending. |
 | [Vertigo](https://github.com/Builderb0y/Vertigo) | `7a64414ab9b615f8aeea2d8ce29f2a9290f4cec8` | Negotiated client/server section protocol integration pending. |
 | [FastNoise](https://codeberg.org/ZenXArch/FastNoise) | `8e88157ca6366d15f406bc9bab27ef23654f664d` | Noise, surface and material-compiler integration pending comparison with native generation. |
 
@@ -30,7 +30,29 @@ the native source and generated patch. Moonrise's separate optimized NBT I/O
 path remains unchanged; no claim is made that every chunk read uses this path.
 Reduced stream calls are verified by tests, not a measured server TPS gain.
 
-## Integration constraints established from source
+## Explodee and holiday caches
+
+`performance.explosions.spherical-rays` defaults to false. Enabling it uses
+Explodee's spherical distribution and ray-count formula. The common 100-ray
+case has precomputed immutable directions; other counts compute each ray into
+one three-double scratch array per explosion, without an unbounded radius cache
+or per-ray allocation. The existing resistance cache, block protection, piston,
+event, drop, entity-damage and knockback code remains in place. Non-finite radii
+retain the native path. Tests compare the source distribution, verify unit
+vectors and exercise the real native loop: radius four uses 100 rays when enabled
+and 1,352 when disabled. This is a work-count assertion, not a TPS benchmark.
+Actual destruction patterns, TNT chains and event-heavy gameplay remain untested.
+Original MIT-0 license: `licenses/Explodee-MIT-0.txt`.
+
+Christmas checks cache one immutable local-day result instead of creating a date
+on every call. The independent native adaptation of Potatoptimize's holiday-cache
+idea retains the native December 24-26 range, current system timezone and clock
+rewinds. Concurrent calls use their own calculated result even if another thread
+publishes a different day or timezone. Tests cover boundary milliseconds, year
+changes, rewinds and concurrent timezone probes. Halloween retains the existing
+Gale implementation. No general world-thread compatibility is implied.
+
+## Remaining integration constraints
 
 - BetterMaps workers call structure lookup and publish item/player changes
   directly. Adapt deferred lookup around Paper's world ownership instead of
