@@ -1,0 +1,64 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sodium <sodium@kiyro.dev>
+Date: Sat, 14 Nov 2026 09:37:27 -0300
+Subject: [PATCH] Serialize only the entity NBT keys a datapack reads
+
+
+diff --git a/net/minecraft/advancements/predicates/NbtPredicate.java b/net/minecraft/advancements/predicates/NbtPredicate.java
+index fe1fb1e3773e3efe7f228275b8753981db7cfa7a..8aa18f946a6b7b178bb898707776c052ce5b3112 100644
+--- a/net/minecraft/advancements/predicates/NbtPredicate.java
++++ b/net/minecraft/advancements/predicates/NbtPredicate.java
+@@ -32,6 +32,12 @@ public record NbtPredicate(CompoundTag tag) {
+     }
+ 
+     public boolean matches(final Entity entity) {
++        // TintedPaper start - DatapackOptimizer: serialize only the keys this predicate reads
++        final Boolean partial = org.dreeam.leaf.util.nbt.NbtPartialMatcher.tryPartialMatch(entity, this.tag);
++        if (partial != null) {
++            return partial;
++        }
++        // TintedPaper end - DatapackOptimizer: serialize only the keys this predicate reads
+         return this.matches(getEntityTagToCompare(entity));
+     }
+ 
+diff --git a/net/minecraft/advancements/predicates/entity/EntityNbtPredicate.java b/net/minecraft/advancements/predicates/entity/EntityNbtPredicate.java
+index c25cbb8a798e244776c012877b9c6625f43104b3..8a56dbaf3eaca7f543317e6019db736746498b57 100644
+--- a/net/minecraft/advancements/predicates/entity/EntityNbtPredicate.java
++++ b/net/minecraft/advancements/predicates/entity/EntityNbtPredicate.java
+@@ -12,6 +12,6 @@ public record EntityNbtPredicate(NbtPredicate nbt) implements EntitySubPredicate
+ 
+     @Override
+     public boolean matches(final Entity entity, final ServerLevel level, final @Nullable Vec3 position) {
+-        return this.nbt.matches(NbtPredicate.getEntityTagToCompare(entity));
++        return this.nbt.matches(org.dreeam.leaf.util.nbt.NbtPartialMatcher.tagForPredicate(entity, this.nbt)); // TintedPaper - DatapackOptimizer: serialize only the keys this predicate reads
+     }
+ }
+diff --git a/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java b/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
+index f4ca9a19d2f223311accd96e9215cba263d3d405..c89451b8bd4d6143453d98b9adad2127778882ae 100644
+--- a/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
++++ b/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
+@@ -329,10 +329,23 @@ public class EntitySelectorOptions {
+                 parser.addPredicate(e -> {
+                     try (ProblemReporter.ScopedCollector reporter = new ProblemReporter.ScopedCollector(e.problemPath(), LOGGER)) {
+                         TagValueOutput output = TagValueOutput.createWithContext(reporter, e.registryAccess());
+-                        e.saveWithoutId(output);
++                        // TintedPaper start - DatapackOptimizer: serialize only the keys this selector compares
++                        final boolean partialNbt = org.dreeam.leaf.config.modules.opt.NbtPartial.active() && !tag.isEmpty();
++                        if (partialNbt) {
++                            e.saveWithoutId(new org.dreeam.leaf.util.nbt.KeyFilterValueOutput(output, tag));
++                            org.dreeam.leaf.config.modules.opt.NbtPartial.selectorFiltered.increment();
++                        } else {
++                            e.saveWithoutId(output);
++                        }
++                        // TintedPaper end - DatapackOptimizer: serialize only the keys this selector compares
+                         if (e instanceof ServerPlayer player) {
+                             ItemStack selected = player.getInventory().getSelectedItem();
+                             if (!selected.isEmpty()) {
++                                // TintedPaper start - DatapackOptimizer: skip SelectedItem when the compared tag does not name it
++                                if (partialNbt && org.dreeam.leaf.config.modules.opt.NbtPartial.selectorReadFilter && !tag.contains("SelectedItem")) {
++                                    org.dreeam.leaf.config.modules.opt.NbtPartial.selectorItemSkips.increment();
++                                } else
++                                // TintedPaper end - DatapackOptimizer: skip SelectedItem when the compared tag does not name it
+                                 output.store("SelectedItem", ItemStack.CODEC, selected);
+                             }
+                         }

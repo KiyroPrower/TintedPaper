@@ -175,6 +175,12 @@
       "reason": "Targets org.bxteam.divinemc.async.rct.RegionizedChunkTicking. TintedPaper does not contain that DivineMC subsystem; its parallel world/tracker implementation must retain its own ownership model.",
       "evidence": ["DatapackOptimizer/src/main/java/com/kiyroprower/datapackoptimizer/mixin/threads/RegionSinglePhaseMixin.java"],
       "mixins": ["threads.RegionSinglePhaseMixin"]
+    },
+    {
+      "status": "native-behaviour-ported",
+      "reason": "Entity NBT is serialized through KeyFilterValueOutput so only the top-level keys the comparison names are encoded: @e[nbt=] (with the player SelectedItem skipped when the compared tag does not name it), EntityNbtPredicate (advancements, loot predicates and the predicate= selector option) and NbtPredicate.matches(Entity). Matching still uses NbtUtils.compareNbt on the filtered tag. NbtPredicate.matches verifies its first 500 results against the full serialization and turns partial matching off for the process on the first difference; the other two entry points keep native matching. The data get path-scoped variant, the discarded-preparation hooks and the /dpo status counters are not part of this port.",
+      "evidence": ["tintedpaper-server/src/main/java/org/dreeam/leaf/util/nbt/NbtPartialMatcher.java", "tintedpaper-server/src/main/java/org/dreeam/leaf/util/nbt/KeyFilterValueOutput.java", "tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/opt/NbtPartial.java", "tintedpaper-server/src/minecraft/java/net/minecraft/advancements/predicates/NbtPredicate.java", "tintedpaper-server/src/minecraft/java/net/minecraft/advancements/predicates/entity/EntityNbtPredicate.java", "tintedpaper-server/src/minecraft/java/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DatapackNbtPartialTest.java"],
+      "mixins": ["commands.NbtPredicatePartialMixin", "commands.EntityPredicateNbtPartialMixin", "commands.EntitySelectorOptionsNbtPartialMixin"]
     }
   ]
 }
