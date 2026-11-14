@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sat, 14 Nov 2026 07:00:59 -0300
+Subject: [PATCH] Port opt-in movement allowances while preserving Paper
+ fail-move events
+
+
+diff --git a/net/minecraft/server/network/ServerGamePacketListenerImpl.java b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+index 4c3d981d1d6a63cafe4b8350ad527cb81f9b8d1f..8add6a7dbd314855910e62cb36a3bafc9b508588 100644
+--- a/net/minecraft/server/network/ServerGamePacketListenerImpl.java
++++ b/net/minecraft/server/network/ServerGamePacketListenerImpl.java
+@@ -643,7 +643,7 @@ public class ServerGamePacketListenerImpl
+                     return;
+                 }
+                 // Paper end - Prevent moving into unloaded chunks
+-                if (movedDist - expectedDist > Math.max(100.0, Mth.square(org.spigotmc.SpigotConfig.movedTooQuicklyMultiplier * (float) i * speed)) && !this.isSingleplayerOwner()) {
++                if (!org.dreeam.leaf.config.modules.fixes.MovementChecks.alwaysAllowWeirdMovement && movedDist - expectedDist > Math.max(100.0, Mth.square(org.spigotmc.SpigotConfig.movedTooQuicklyMultiplier * (float) i * speed)) && !this.isSingleplayerOwner()) { // TintedPaper - DivineMC movement policy
+                     // CraftBukkit end
+                     LOGGER.warn(
+                         "{} (vehicle of {}) moved too quickly! {},{},{}", vehicle.getPlainTextName(), this.player.getPlainTextName(), xDist, yDist, zDist
+@@ -673,7 +673,7 @@ public class ServerGamePacketListenerImpl
+                 zDist = targetZ - vehicle.getZ();
+                 movedDist = xDist * xDist + yDist * yDist + zDist * zDist;
+                 boolean fail = false;
+-                if (movedDist > org.spigotmc.SpigotConfig.movedWronglyThreshold) { // Spigot
++                if (!org.dreeam.leaf.config.modules.fixes.MovementChecks.alwaysAllowWeirdMovement && movedDist > org.spigotmc.SpigotConfig.movedWronglyThreshold) { // Spigot // TintedPaper - DivineMC movement policy
+                     fail = true;
+                     LOGGER.warn("{} (vehicle of {}) moved wrongly! {}", vehicle.getPlainTextName(), this.player.getPlainTextName(), Math.sqrt(movedDist));
+                 }
+@@ -4004,8 +4004,16 @@ public class ServerGamePacketListenerImpl
+         org.bukkit.entity.Player player = this.getCraftPlayer();
+         Location from = new Location(player.getWorld(), this.lastPosX, this.lastPosY, this.lastPosZ, this.lastYRot, this.lastXRot);
+         Location to = new Location(player.getWorld(), targetX, targetY, targetZ, targetYRot, targetXRot);
++        // TintedPaper start - DivineMC movement policy; keep plugins authoritative and collision/chunk checks intact
++        boolean allowed = switch (failReason) {
++            case MOVED_TOO_QUICKLY -> org.dreeam.leaf.config.modules.fixes.MovementChecks.alwaysAllowWeirdMovement
++                || (org.dreeam.leaf.config.modules.fixes.MovementChecks.ignoreMovedTooQuicklyWhenLagging && this.player.level().getServer().lagging);
++            case MOVED_WRONGLY -> org.dreeam.leaf.config.modules.fixes.MovementChecks.alwaysAllowWeirdMovement;
++            default -> false;
++        };
+         io.papermc.paper.event.player.PlayerFailMoveEvent event = new io.papermc.paper.event.player.PlayerFailMoveEvent(player, failReason,
+-            false, logWarning, from, to);
++            allowed, logWarning, from, to);
++        // TintedPaper end - DivineMC movement policy
+         event.callEvent();
+         return event;
+     }

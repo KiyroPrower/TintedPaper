@@ -259,6 +259,19 @@
       "status": "unnecessary-after-compatible-port",
       "reason": "This patch only removes the lifecycle guard that refers to the source-deleted ReloadCommand class. TintedPaper preserves that public class and removes only its default command registrations, so the guard remains valid and necessary; deleting it would weaken the existing Paper API contract.",
       "evidence": ["paper-api/src/main/java/org/bukkit/command/defaults/ReloadCommand.java", "paper-server/src/main/java/org/bukkit/craftbukkit/CraftServer.java", "paper-api/src/test/java/org/bukkit/command/ReloadRegistrationTest.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0024-Option-to-allow-weird-movement-and-disable-teleporti.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Expose the source's player/vehicle speed and displacement allowance and lag-only player speed allowance. Keep both switches false by default to preserve the current fork's movement policy, rather than copying DivineMC's enabled defaults. Player allowances set the initial Paper fail-move event decision instead of skipping the event, so plugins can still reject or allow movement. Vehicle speed/displacement checks honor only the all-movement switch, matching the source. Collision, unloaded-chunk, finite-packet and game-rule checks retain their existing paths. No work moves between threads.",
+      "config": ["fixes.movement.always-allow-weird-movement", "fixes.movement.ignore-moved-too-quickly-when-lagging"],
+      "evidence": ["tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/fixes/MovementChecks.java", "tintedpaper-server/src/minecraft/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineMovementPolicyTest.java"]
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0003-Delete-timings.patch",
+      "status": "covered-by-base",
+      "reason": "PaperPluginManagerImpl.useTimings already returns false through the inherited Timings removal patch. Preserve the existing implementation and retained no-op API compatibility class instead of deleting it.",
+      "evidence": ["tintedpaper-server/paper-patches/features/0028-Remove-Timings.patch", "paper-server/src/main/java/io/papermc/paper/plugin/manager/PaperPluginManagerImpl.java", "paper-api/src/main/java/co/aikar/timings/Timings.java"]
     }
   ],
   "compatibilityFixes": [
