@@ -1,0 +1,100 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 12:34:40 -0300
+Subject: [PATCH] Track all live tag set mutations and serialize index
+ lifecycle updates
+
+
+diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
+index 3e4a5fde2a1e32ec3053de366a97bb18e479d099..e55be2f5bea32547671e7e57393d914f33c5e71c 100644
+--- a/net/minecraft/server/level/ServerLevel.java
++++ b/net/minecraft/server/level/ServerLevel.java
+@@ -3469,9 +3469,8 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
+         @Override
+         public void onTrackingStart(final Entity entity) {
+             org.spigotmc.AsyncCatcher.catchOp("entity register"); // Spigot
+-            // TintedPaper start - DatapackOptimizer: tag index; the flag is set before the tags are read
+-            entity.tintedTagIndexed = true;
+-            ServerLevel.this.tagIndex.indexEntity(entity);
++            // TintedPaper start - DatapackOptimizer: tag index
++            entity.tintedTrackTags(ServerLevel.this.tagIndex);
+             // TintedPaper end - DatapackOptimizer: tag index
+             // ServerLevel.this.getChunkSource().addEntity(entity); // Paper - ignore and warn about illegal addEntity calls instead of crashing server; moved down below valid=true
+             if (entity instanceof ServerPlayer player) {
+@@ -3524,8 +3523,7 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
+         public void onTrackingEnd(final Entity entity) {
+             org.spigotmc.AsyncCatcher.catchOp("entity unregister"); // Spigot
+             // TintedPaper start - DatapackOptimizer: tag index
+-            entity.tintedTagIndexed = false;
+-            ServerLevel.this.tagIndex.removeEntity(entity);
++            entity.tintedTrackTags(null);
+             // TintedPaper end - DatapackOptimizer: tag index
+             // Spigot start
+             if (entity instanceof Player player) {
+diff --git a/net/minecraft/world/entity/Entity.java b/net/minecraft/world/entity/Entity.java
+index bba1dfbc8d242673365e973f15ee1ff64fa92a1e..293bb88a92a2a7fa144157b5e62662dcaf3e0a67 100644
+--- a/net/minecraft/world/entity/Entity.java
++++ b/net/minecraft/world/entity/Entity.java
+@@ -343,7 +343,7 @@ public abstract class Entity
+     protected String stringUUID; // Purpur - Add toggle for RNG manipulation
+     private boolean hasGlowingTag;
+     // TintedPaper - tags can be read by NBT predicates while another world's command changes them.
+-    private final Set<String> tags = new io.papermc.paper.util.SizeLimitedSet<>(new java.util.concurrent.CopyOnWriteArraySet<>(), MAX_ENTITY_TAG_COUNT); // Paper - fully limit tag size - replace set impl
++    private final org.dreeam.leaf.util.selector.IndexedEntityTags tags = new org.dreeam.leaf.util.selector.IndexedEntityTags(this, MAX_ENTITY_TAG_COUNT); // TintedPaper - retain the live set contract and track every mutation
+     private final double[] pistonDeltas = new double[]{0.0, 0.0, 0.0};
+     private long pistonDeltasGameTime;
+     protected EntityDimensions dimensions;
+@@ -717,28 +717,17 @@ public abstract class Entity
+     }
+ 
+     // TintedPaper start - DatapackOptimizer: tag index
+-    /** True from the moment the level starts tracking this entity until tracking ends; see {@link net.minecraft.server.level.ServerLevel#tagIndex}. */
+-    public volatile boolean tintedTagIndexed;
++    public void tintedTrackTags(final org.dreeam.leaf.util.selector.@Nullable EntityTagIndex index) {
++        this.tags.track(index);
++    }
+     // TintedPaper end - DatapackOptimizer: tag index
+ 
+     public boolean addTag(final String tag) {
+-        final boolean added = this.tags.add(tag); // Paper - fully limit tag size - replace set impl
+-        // TintedPaper start - DatapackOptimizer: tag index; the tag is in the set before the flag is read
+-        if (added && this.tintedTagIndexed && this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+-            serverLevel.tagIndex.addEntityTag(this, tag);
+-        }
+-        // TintedPaper end - DatapackOptimizer: tag index
+-        return added;
++        return this.tags.add(tag); // Paper - fully limit tag size - replace set impl
+     }
+ 
+     public boolean removeTag(final String tag) {
+-        final boolean removed = this.tags.remove(tag);
+-        // TintedPaper start - DatapackOptimizer: tag index
+-        if (removed && this.tintedTagIndexed && this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+-            serverLevel.tagIndex.removeEntityTag(this, tag);
+-        }
+-        // TintedPaper end - DatapackOptimizer: tag index
+-        return removed;
++        return this.tags.remove(tag);
+     }
+ 
+     public void kill(final ServerLevel level) {
+@@ -3101,19 +3090,8 @@ public abstract class Entity
+                 );
+                 // Paper end
+                 this.customData = input.read("data", CustomData.CODEC).orElse(CustomData.EMPTY);
+-                // TintedPaper start - DatapackOptimizer: tag index; reloading the tags of a tracked entity (/data merge entity)
+-                final net.minecraft.server.level.ServerLevel taggedLevel = this.tintedTagIndexed && this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel ? serverLevel : null;
+-                if (taggedLevel != null) {
+-                    taggedLevel.tagIndex.removeEntity(this);
+-                }
+-                // TintedPaper end - DatapackOptimizer: tag index
+                 this.tags.clear();
+                 input.read("Tags", TAG_LIST_CODEC).ifPresent(this.tags::addAll);
+-                // TintedPaper start - DatapackOptimizer: tag index
+-                if (taggedLevel != null) {
+-                    taggedLevel.tagIndex.indexEntity(this);
+-                }
+-                // TintedPaper end - DatapackOptimizer: tag index
+                 input.getString("Team").ifPresent(teamName -> {
+                     Scoreboard scoreboard = this.level().getScoreboard();
+                     PlayerTeam team = scoreboard.getPlayerTeam(teamName);

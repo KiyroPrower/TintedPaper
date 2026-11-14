@@ -1,0 +1,163 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sodium <sodium@kiyro.dev>
+Date: Sat, 14 Nov 2026 09:52:58 -0300
+Subject: [PATCH] Verify the entity tag index and its selector fast path
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..1a8de01e37f75e3aaa4462bf484baa2cbc98358d
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
+@@ -0,0 +1,151 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.papermc.paper.configuration.WorldConfiguration;
++import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.UUID;
++import net.minecraft.core.RegistryAccess;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.Marker;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.entity.EntityTypeTest;
++import org.bukkit.craftbukkit.CraftWorld;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.util.selector.EntityTagIndex;
++import org.dreeam.leaf.util.selector.TagIndexScan;
++import org.junit.jupiter.api.Test;
++import org.purpurmc.purpur.PurpurWorldConfig;
++import org.spigotmc.SpigotWorldConfig;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DatapackTagIndexTest {
++    private static final EntityTypeTest<Entity, Entity> ANY = EntityTypeTest.forClass(Entity.class);
++
++    private static ServerLevel level() throws Exception {
++        ServerLevel level = mock(ServerLevel.class);
++        var purpurConfig = Level.class.getField("purpurConfig");
++        purpurConfig.setAccessible(true);
++        purpurConfig.set(level, mock(PurpurWorldConfig.class));
++        var spigotConfig = Level.class.getField("spigotConfig");
++        spigotConfig.setAccessible(true);
++        spigotConfig.set(level, mock(SpigotWorldConfig.class));
++        WorldConfiguration config = mock(WorldConfiguration.class);
++        config.entities = mock(WorldConfiguration.Entities.class);
++        config.entities.spawning = mock(WorldConfiguration.Entities.Spawning.class);
++        config.entities.spawning.despawnTime = new Reference2ObjectOpenHashMap<>();
++        when(level.paperConfig()).thenReturn(config);
++        when(level.getNextEntityId()).thenReturn(1);
++        when(level.registryAccess()).thenReturn(RegistryAccess.EMPTY);
++        CraftWorld world = mock(CraftWorld.class);
++        when(world.getUID()).thenReturn(new UUID(1, 2));
++        when(level.getWorld()).thenReturn(world);
++        var tagIndex = ServerLevel.class.getField("tagIndex");
++        tagIndex.setAccessible(true);
++        tagIndex.set(level, new EntityTagIndex());
++        return level;
++    }
++
++    /** A tracked marker: in the level's lookup and in its tag index, like an entity after onTrackingStart. */
++    private static Marker tracked(ServerLevel level, int id, String... tags) {
++        Marker marker = new Marker(EntityTypes.MARKER, level);
++        marker.setId(id);
++        for (String tag : tags) {
++            marker.addTag(tag);
++        }
++        marker.tintedTagIndexed = true;
++        level.tagIndex.indexEntity(marker);
++        when(level.getEntity(id)).thenReturn(marker);
++        return marker;
++    }
++
++    @Test
++    void unlimitedScanReturnsEveryTaggedEntityThePredicateAccepts() throws Exception {
++        ServerLevel level = level();
++        Marker a = tracked(level, 1, "boss");
++        Marker b = tracked(level, 2, "boss", "elite");
++        tracked(level, 3, "other");
++        Marker c = tracked(level, 4, "boss");
++        List<Entity> result = new ArrayList<>();
++        assertTrue(TagIndexScan.serve(List.of("boss"), ANY, level, e -> e != c, result, false));
++        assertEquals(2, result.size());
++        assertTrue(result.contains(a) && result.contains(b));
++    }
++
++    @Test
++    void severalTagsUseTheSmallestBucketAndTheFullPredicateStillDecides() throws Exception {
++        ServerLevel level = level();
++        Marker both = tracked(level, 1, "x", "y");
++        tracked(level, 2, "x");
++        tracked(level, 3, "x");
++        List<Entity> result = new ArrayList<>();
++        // the caller's predicate checks both tags; the index only narrows the candidates
++        assertTrue(TagIndexScan.serve(List.of("x", "y"), ANY, level, e -> e.entityTags().contains("x") && e.entityTags().contains("y"), result, false));
++        assertEquals(List.of(both), result);
++    }
++
++    @Test
++    void anUnknownTagServesAnEmptyResultWithoutScanning() throws Exception {
++        ServerLevel level = level();
++        tracked(level, 1, "boss");
++        List<Entity> result = new ArrayList<>();
++        assertTrue(TagIndexScan.serve(List.of("missing"), ANY, level, e -> true, result, false));
++        assertTrue(result.isEmpty());
++    }
++
++    @Test
++    void removedEntitiesAndEntitiesNotInTheLookupAreSkipped() throws Exception {
++        ServerLevel level = level();
++        Marker gone = tracked(level, 1, "boss");
++        Marker stale = tracked(level, 2, "boss");
++        Marker live = tracked(level, 3, "boss");
++        gone.discard();
++        when(level.getEntity(2)).thenReturn(null);
++        List<Entity> result = new ArrayList<>();
++        assertTrue(TagIndexScan.serve(List.of("boss"), ANY, level, e -> true, result, false));
++        assertEquals(List.of(live), result);
++        assertNotNull(stale);
++    }
++
++    @Test
++    void limitedScanIsServedOnlyForZeroOrOneMatchAndNeverTouchesResultOtherwise() throws Exception {
++        ServerLevel level = level();
++        Marker one = tracked(level, 1, "boss");
++        List<Entity> result = new ArrayList<>();
++        assertTrue(TagIndexScan.serve(List.of("boss"), ANY, level, e -> true, result, true));
++        assertEquals(List.of(one), result);
++
++        tracked(level, 2, "boss");
++        List<Entity> untouched = new ArrayList<>();
++        assertFalse(TagIndexScan.serve(List.of("boss"), ANY, level, e -> true, untouched, true), "two matches: vanilla decides the order and the cut");
++        assertTrue(untouched.isEmpty());
++
++        List<Entity> prefilled = new ArrayList<>(List.of(one));
++        assertFalse(TagIndexScan.serve(List.of("boss"), ANY, level, e -> false, prefilled, true), "a prefilled result is never extended");
++        assertEquals(List.of(one), prefilled);
++    }
++
++    @Test
++    void tagChangesOfATrackedEntityUpdateTheIndexAndUntrackedOnesDoNot() throws Exception {
++        ServerLevel level = level();
++        Marker entity = tracked(level, 1);
++        assertTrue(level.tagIndex.getEntitiesWithTag("late").isEmpty());
++        entity.addTag("late");
++        assertTrue(level.tagIndex.getEntitiesWithTag("late").contains(entity));
++        entity.removeTag("late");
++        assertTrue(level.tagIndex.getEntitiesWithTag("late").isEmpty());
++
++        entity.tintedTagIndexed = false;
++        entity.addTag("quiet");
++        assertTrue(level.tagIndex.getEntitiesWithTag("quiet").isEmpty(), "an untracked entity is indexed when tracking starts, not before");
++        level.tagIndex.indexEntity(entity);
++        assertTrue(level.tagIndex.getEntitiesWithTag("quiet").contains(entity));
++        level.tagIndex.removeEntity(entity);
++        assertTrue(level.tagIndex.getEntitiesWithTag("quiet").isEmpty());
++    }
++}

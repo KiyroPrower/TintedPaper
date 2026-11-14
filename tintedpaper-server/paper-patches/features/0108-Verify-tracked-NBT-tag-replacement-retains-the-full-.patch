@@ -1,0 +1,30 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 12:35:34 -0300
+Subject: [PATCH] Verify tracked NBT tag replacement retains the full tag limit
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
+index e5029065fc58850d969a43bf87885af2d9add928..9cc6395e18be1e9accb282522b0a63010fa0ae67 100644
+--- a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
+@@ -180,4 +180,19 @@ class DatapackTagIndexTest {
+         entity.tintedTrackTags(null);
+         for (String tag : tags) assertTrue(destination.getEntitiesWithTag(tag).isEmpty());
+     }
++
++    @Test
++    void nbtReplacementRemovesOldBucketsAndIndexesAllSavedTags() throws Exception {
++        ServerLevel level = level();
++        Marker entity = tracked(level, 1, "old");
++        var saved = new net.minecraft.nbt.CompoundTag();
++        var values = new net.minecraft.nbt.ListTag();
++        for (int i = 0; i < Entity.MAX_ENTITY_TAG_COUNT; i++) values.add(net.minecraft.nbt.StringTag.valueOf("tag" + i));
++        saved.put("Tags", values);
++        entity.load(net.minecraft.world.level.storage.TagValueInput.create(net.minecraft.util.ProblemReporter.DISCARDING, RegistryAccess.EMPTY, saved));
++        assertTrue(level.tagIndex.getEntitiesWithTag("old").isEmpty());
++        assertEquals(Entity.MAX_ENTITY_TAG_COUNT, entity.entityTags().size());
++        for (String tag : entity.entityTags()) assertTrue(level.tagIndex.getEntitiesWithTag(tag).contains(entity));
++        assertEquals(saved.get("Tags"), net.minecraft.advancements.predicates.NbtPredicate.getEntityTagToCompare(entity).get("Tags"));
++    }
+ }

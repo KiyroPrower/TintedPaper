@@ -1,0 +1,88 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 12:34:41 -0300
+Subject: [PATCH] Cover live Bukkit tag mutations, transfers and predicate-safe
+ fallback
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
+index 1a8de01e37f75e3aaa4462bf484baa2cbc98358d..e5029065fc58850d969a43bf87885af2d9add928 100644
+--- a/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTagIndexTest.java
+@@ -58,8 +58,7 @@ class DatapackTagIndexTest {
+         for (String tag : tags) {
+             marker.addTag(tag);
+         }
+-        marker.tintedTagIndexed = true;
+-        level.tagIndex.indexEntity(marker);
++        marker.tintedTrackTags(level.tagIndex);
+         when(level.getEntity(id)).thenReturn(marker);
+         return marker;
+     }
+@@ -104,7 +103,9 @@ class DatapackTagIndexTest {
+         Marker gone = tracked(level, 1, "boss");
+         Marker stale = tracked(level, 2, "boss");
+         Marker live = tracked(level, 3, "boss");
+-        gone.discard();
++        var removalReason = Entity.class.getDeclaredField("removalReason");
++        removalReason.setAccessible(true);
++        removalReason.set(gone, Entity.RemovalReason.DISCARDED);
+         when(level.getEntity(2)).thenReturn(null);
+         List<Entity> result = new ArrayList<>();
+         assertTrue(TagIndexScan.serve(List.of("boss"), ANY, level, e -> true, result, false));
+@@ -122,7 +123,7 @@ class DatapackTagIndexTest {
+ 
+         tracked(level, 2, "boss");
+         List<Entity> untouched = new ArrayList<>();
+-        assertFalse(TagIndexScan.serve(List.of("boss"), ANY, level, e -> true, untouched, true), "two matches: vanilla decides the order and the cut");
++        assertFalse(TagIndexScan.serve(List.of("boss"), ANY, level, e -> { fail("fallback must not consume predicate state"); return true; }, untouched, true), "two candidates: vanilla decides the order and the cut");
+         assertTrue(untouched.isEmpty());
+ 
+         List<Entity> prefilled = new ArrayList<>(List.of(one));
+@@ -140,12 +141,43 @@ class DatapackTagIndexTest {
+         entity.removeTag("late");
+         assertTrue(level.tagIndex.getEntitiesWithTag("late").isEmpty());
+ 
+-        entity.tintedTagIndexed = false;
++        entity.tintedTrackTags(null);
+         entity.addTag("quiet");
+         assertTrue(level.tagIndex.getEntitiesWithTag("quiet").isEmpty(), "an untracked entity is indexed when tracking starts, not before");
+-        level.tagIndex.indexEntity(entity);
++        entity.tintedTrackTags(level.tagIndex);
+         assertTrue(level.tagIndex.getEntitiesWithTag("quiet").contains(entity));
+-        level.tagIndex.removeEntity(entity);
++        entity.tintedTrackTags(null);
+         assertTrue(level.tagIndex.getEntitiesWithTag("quiet").isEmpty());
+     }
++
++    @Test
++    void liveBukkitSetMutationsAndWorldTransfersKeepTheIndexComplete() throws Exception {
++        ServerLevel level = level();
++        Marker entity = tracked(level, 1);
++        var tags = entity.entityTags();
++        tags.addAll(List.of("a", "b", "c"));
++        for (String tag : tags) assertTrue(level.tagIndex.getEntitiesWithTag(tag).contains(entity));
++        var iterator = tags.iterator();
++        String first = iterator.next();
++        iterator.remove();
++        assertTrue(level.tagIndex.getEntitiesWithTag(first).isEmpty());
++        tags.removeAll(List.of("b"));
++        assertTrue(level.tagIndex.getEntitiesWithTag("b").isEmpty());
++        tags.addAll(List.of("a", "b", "c"));
++        tags.retainAll(List.of("a", "c"));
++        assertTrue(level.tagIndex.getEntitiesWithTag("b").isEmpty());
++        tags.removeIf("c"::equals);
++        assertTrue(level.tagIndex.getEntitiesWithTag("c").isEmpty());
++        EntityTagIndex destination = new EntityTagIndex();
++        entity.tintedTrackTags(destination);
++        assertTrue(level.tagIndex.getEntitiesWithTag("a").isEmpty());
++        assertTrue(destination.getEntitiesWithTag("a").contains(entity));
++        tags.clear();
++        assertTrue(destination.getEntitiesWithTag("a").isEmpty());
++        for (int i = 0; i < Entity.MAX_ENTITY_TAG_COUNT; i++) assertTrue(tags.add("tag" + i));
++        assertFalse(tags.add("overflow"));
++        assertTrue(destination.getEntitiesWithTag("overflow").isEmpty());
++        entity.tintedTrackTags(null);
++        for (String tag : tags) assertTrue(destination.getEntitiesWithTag(tag).isEmpty());
++    }
+ }
