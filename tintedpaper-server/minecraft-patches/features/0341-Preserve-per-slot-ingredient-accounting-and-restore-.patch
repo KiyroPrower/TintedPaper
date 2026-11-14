@@ -1,0 +1,74 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 23:54:31 -0300
+Subject: [PATCH] Preserve per-slot ingredient accounting and restore recipe
+ extras after failures
+
+
+diff --git a/io/papermc/paper/inventory/recipe/StackedContentsExtrasMap.java b/io/papermc/paper/inventory/recipe/StackedContentsExtrasMap.java
+index a9dcccefb19e6610076e1153547d2f9156042313..e3470523b990ee277e83180abb85c6e6d05ee153 100644
+--- a/io/papermc/paper/inventory/recipe/StackedContentsExtrasMap.java
++++ b/io/papermc/paper/inventory/recipe/StackedContentsExtrasMap.java
+@@ -44,9 +44,14 @@ public final class StackedContentsExtrasMap {
+                 if (this.accountStack(item, 1)) {
+                     // if stack was accounted for as an exact ingredient, don't include it in the regular contents
+                     final ItemOrExact.Item asItem = new ItemOrExact.Item(item);
+-                    if (this.contents.amounts.containsKey(asItem)) {
+-                        final int amount = this.contents.amounts.removeInt(asItem);
+-                        this.regularRemoved.put(asItem, amount);
++                    final int amount = this.contents.amounts.getInt(asItem);
++                    if (amount > 0) {
++                        if (amount == 1) {
++                            this.contents.amounts.removeInt(asItem);
++                        } else {
++                            this.contents.amounts.put(asItem, amount - 1);
++                        }
++                        this.regularRemoved.put(asItem, this.regularRemoved.getInt(asItem) + 1);
+                     }
+                 }
+             }
+@@ -55,9 +60,7 @@ public final class StackedContentsExtrasMap {
+ 
+     public void resetExtras() {
+         // clear previous extra ids
+-        for (final ItemStack extra : this.exactIngredients) {
+-            this.contents.amounts.removeInt(new ItemOrExact.Exact(extra));
+-        }
++        this.contents.amounts.keySet().removeIf(key -> key instanceof ItemOrExact.Exact);
+         for (final Object2IntMap.Entry<ItemOrExact.Item> entry : this.regularRemoved.object2IntEntrySet()) {
+             this.contents.amounts.addTo(entry.getKey(), entry.getIntValue());
+         }
+diff --git a/net/minecraft/world/item/crafting/Ingredient.java b/net/minecraft/world/item/crafting/Ingredient.java
+index c463dae011eaeb5c0c87d3313b0058313809e4ec..6f7083e16df61ad5ecf57d231d6b3822188c2ad6 100644
+--- a/net/minecraft/world/item/crafting/Ingredient.java
++++ b/net/minecraft/world/item/crafting/Ingredient.java
+@@ -102,7 +102,7 @@ public final class Ingredient implements Predicate<ItemStack>, StackedContents.I
+     public boolean acceptsItem(final io.papermc.paper.inventory.recipe.ItemOrExact itemOrExact) {
+         return switch (itemOrExact) {
+             case io.papermc.paper.inventory.recipe.ItemOrExact.Item(final Holder<Item> item) ->
+-                !this.isExact() && this.values.contains(item);
++                this.stackPredicate == null && !this.isExact() && this.values.contains(item);
+             case io.papermc.paper.inventory.recipe.ItemOrExact.Exact(final ItemStack exact) -> {
+                 if (this.stackPredicate != null) {
+                     yield this.stackPredicate.test(exact);
+diff --git a/net/minecraft/world/item/crafting/ShapelessRecipe.java b/net/minecraft/world/item/crafting/ShapelessRecipe.java
+index 431316a2d2f1e14cdf2edc7bf414b00416de645e..f57c9b0b8826176ddff357d654e3d640655e22cf 100644
+--- a/net/minecraft/world/item/crafting/ShapelessRecipe.java
++++ b/net/minecraft/world/item/crafting/ShapelessRecipe.java
+@@ -111,10 +111,12 @@ public class ShapelessRecipe extends NormalCraftingRecipe {
+         if (input.size() == 1 && this.ingredients.size() == 1) {
+             return this.ingredients.getFirst().test(input.getItem(0));
+         }
+-        input.stackedContents().initializeExtras(this, input);
+-        boolean canCraft = input.stackedContents().canCraft(this, null);
+-        input.stackedContents().resetExtras();
+-        return canCraft;
++        try {
++            input.stackedContents().initializeExtras(this, input);
++            return input.stackedContents().canCraft(this, null);
++        } finally {
++            input.stackedContents().resetExtras();
++        }
+         // Paper end - Improve exact choice recipe ingredients & unwrap ternary
+     }
+ 

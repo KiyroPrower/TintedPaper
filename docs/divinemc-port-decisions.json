@@ -223,6 +223,24 @@
       "status": "covered-by-base",
       "reason": "World ticking already records the elapsed level tick duration into 100-, 200- and 1200-sample windows. Keep the existing tickTimes1m name and the additional TPS-bar integration rather than adding a duplicate tickTimes60s window. The matching world metrics API is also already inherited.",
       "evidence": ["tintedpaper-server/minecraft-patches/features/0176-SparklyPaper-Track-each-world-MSPT.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/server/MinecraftServer.java", "tintedpaper-server/src/minecraft/java/net/minecraft/server/level/ServerLevel.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0040-Pufferfish-Simpler-ShapelessRecipes-comparison-for-V.patch",
+      "status": "ported-missing-subset",
+      "reason": "Keep the inherited Gale/Leaf plain-ingredient matcher and Bukkit constructor flag. Port the missing isPlain guard so exact/predicate ingredients use the full matcher. Fix the inherited full matcher's per-type removal of all regular counts instead of one grid slot, predicate routing through the regular pool, stale predicate exact keys, and missing cleanup when a predicate throws; otherwise importing the guard would expose those failures for native recipes.",
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/item/crafting/ShapelessRecipe.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/item/crafting/Ingredient.java", "tintedpaper-server/src/minecraft/java/io/papermc/paper/inventory/recipe/StackedContentsExtrasMap.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineShapelessGuardTest.java"]
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0014-Pufferfish-Simpler-ShapelessRecipes-comparison-for-V.patch",
+      "status": "covered-by-base",
+      "reason": "CraftShapelessRecipe already passes the inherited true Bukkit-origin flag to the native constructor. Retain that integration while adding the missing native complex-ingredient guard separately.",
+      "evidence": ["paper-server/src/main/java/org/bukkit/craftbukkit/inventory/CraftShapelessRecipe.java", "tintedpaper-server/minecraft-patches/features/0008-Simpler-ShapelessRecipe-comparison-for-vanilla.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0026-Optimize-VarInt-and-VarLong-write.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited Gale/Velocity writers already pack the same 1-5 VarInt and 1-10 VarLong encodings into byte/short/medium/int operations, including negative values. Keep the existing branch ladder and original reference writers rather than replace it with DivineMC's byte-size switch.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0073-Optimize-VarInt-write-and-VarLong-write.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/network/VarInt.java", "tintedpaper-server/src/minecraft/java/net/minecraft/network/VarLong.java"]
     }
   ],
   "compatibilityFixes": [
@@ -231,6 +249,12 @@
       "attribution": "Leaf-introduced",
       "reason": "The inherited collection optimization used EnumMap for MushroomBlockTexture cap faces, but several enum constants intentionally use null. Restore the pinned Paper HashMap so initialization, nullable face lookup and legacy material APIs keep working.",
       "evidence": ["tintedpaper-api/paper-patches/features/0021-Replace-data-maps-with-optimized-collection.patch", "paper-api/src/main/java/org/bukkit/material/types/MushroomBlockTexture.java", "paper-api/src/test/java/org/bukkit/materials/MaterialDataTest.java"]
+    },
+    {
+      "status": "fixed",
+      "attribution": "Upstream",
+      "reason": "The full exact-choice matcher inherited from Paper removes every regular item of a type when one grid slot is routed to an exact ingredient; it also fails to clear predicate-derived exact keys. Reproduced with Bukkit-origin recipes before changing the fast-path guard. Preserve per-slot accounting, route predicate choices only through tested exact keys, clear actual exact keys and restore accounting in finally. The separate native failure is caused by the inherited Leaf/Gale fast path and is addressed by the DivineMC guard.",
+      "evidence": ["tintedpaper-server/src/minecraft/java/io/papermc/paper/inventory/recipe/StackedContentsExtrasMap.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/item/crafting/Ingredient.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineShapelessGuardTest.java"]
     }
   ],
   "pendingReview": [

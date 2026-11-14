@@ -4,8 +4,8 @@
   "meaning": "Complete path inventory of active patch trees and module-owned src files at the recorded commit; filenames and pending status are not semantic verification or a claim that every supporting file needs copying. Historical removed patches and Git/build caches are excluded.",
   "counts": {
     "patches": 150,
-    "patchesWithDecision": 33,
-    "patchesPendingReview": 117,
+    "patchesWithDecision": 36,
+    "patchesPendingReview": 114,
     "supportingSourceAndResourceFiles": 258
   },
   "patches": [
@@ -159,7 +159,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0026-Optimize-VarInt-and-VarLong-write.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0027-Optimize-Fluids.patch",
@@ -215,7 +215,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0040-Pufferfish-Simpler-ShapelessRecipes-comparison-for-V.patch",
-      "status": "pending-review"
+      "status": "ported-missing-subset"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0041-Clump-experience-orbs.patch",
@@ -531,7 +531,7 @@
     },
     {
       "source": "divinemc-server/paper-patches/features/0014-Pufferfish-Simpler-ShapelessRecipes-comparison-for-V.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/paper-patches/features/0015-SparklyPaper-Parallel-world-ticking.patch",
