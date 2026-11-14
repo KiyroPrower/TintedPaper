@@ -325,6 +325,192 @@
       "status": "covered-by-base",
       "reason": "The inherited Lithium patch already routes the same four LevelChunk heightmaps through the combined updater and exposes Heightmap.isOpaque. The supporting CombinedHeightmapUpdate Java file is byte-identical to the DivineMC reference (SHA-256 ee65e3d0c54625c4704a2c2b510167c40ca49d5e90bcf43d764cd279580e0773). Keep the existing integration and licenses instead of copying it again.",
       "evidence": ["tintedpaper-server/minecraft-patches/features/0233-Lithium-combined-heightmap-update.patch", "tintedpaper-server/src/main/java/net/caffeinemc/mods/lithium/common/world/chunk/heightmap/CombinedHeightmapUpdate.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/chunk/LevelChunk.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/levelgen/Heightmap.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0055-Do-not-send-spectator-change-packet.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Opt-in network.hide-spectator-game-mode (default off). Other players see a spectator as survival, on join and on game mode changes; the spectator keeps the real packet. Differs from the source, which sent nothing to other players on a change and left them with the stale mode. Plugin showPlayer/hidePlayer packets are not filtered.",
+      "evidence": ["tintedpaper-server/src/main/java/org/dreeam/leaf/util/SpectatorFilter.java", "tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/network/SpectatorPackets.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0044-Catch-update-suppressors.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Opt-in fixes.update-suppression-crash-fix (default off). A shulker box ClassCastException and any throwable in a neighbor update end that update with a log line instead of a crash report; the exception carries no stack trace and is also caught in the level tick and packet processor. The source switch is renamed and defaults to off, preserving vanilla behavior.",
+      "evidence": ["tintedpaper-server/src/main/java/org/dreeam/leaf/util/UpdateSuppressorException.java", "tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/fixes/UpdateSuppression.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0025-Optimize-Raids.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Only the shared ominous banner used for comparisons, cached per level. The cached stack is never given to an entity: Raid still creates a fresh banner for the raid leader. The deferred boss bar update was not ported.",
+      "evidence": ["tintedpaper-server/src/minecraft/java/net/minecraft/world/entity/raid/Raid.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0011-Carpet-Fixes-RecipeManager-Optimize.patch",
+      "status": "covered-by-base",
+      "reason": "Carpet-Fixes optimized RecipeManager, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0088-Carpet-Fixes-Use-optimized-RecipeManager.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0008-lithium-fast_util.patch",
+      "status": "covered-by-base",
+      "reason": "Lithium fast_util, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0156-Lithium-fast-util.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0023-Configurable-movement-speed-for-entities.patch",
+      "status": "covered-by-base",
+      "reason": "Leaf already makes entity movement speed configurable for more entities.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0096-Configurable-movement-speed-of-more-entities.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0031-Virtual-Threads.patch",
+      "status": "covered-by-base",
+      "reason": "Leaf already carries virtual thread support.",
+      "evidence": ["tintedpaper-server/paper-patches/features/0024-Virtual-thread-support.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0035-Implement-Secure-Seed.patch",
+      "status": "covered-by-base",
+      "reason": "Matter Secure Seed, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0110-Matter-Secure-Seed.patch", "tintedpaper-server/paper-patches/features/0034-Matter-Secure-Seed.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0036-Dynamic-Activation-of-Brain.patch",
+      "status": "covered-by-base",
+      "reason": "Pufferfish DAB, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0078-Pufferfish-Dynamic-Activation-of-Brain.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0037-Petal-Async-Pathfinding.patch",
+      "status": "covered-by-base",
+      "reason": "Petal async pathfinding, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0092-Petal-Async-Pathfinding.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0038-Parallel-entity-tracker.patch",
+      "status": "covered-by-base",
+      "reason": "Leaf carries a multithreaded entity tracker (the separate parallel-tracker path the dragon port also integrates).",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0256-Multithreaded-Tracker.patch", "tintedpaper-server/paper-patches/features/0039-Multithreaded-Tracker.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0039-Pufferfish-Optimize-mob-spawning.patch",
+      "status": "covered-by-base",
+      "reason": "Pufferfish mob spawning optimization, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0077-Pufferfish-Optimize-mob-spawning.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0042-SparklyPaper-Parallel-world-ticking.patch",
+      "status": "covered-by-base",
+      "reason": "SparklyPaper parallel world ticking, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0175-SparklyPaper-Parallel-world-ticking.patch", "tintedpaper-server/paper-patches/features/0045-SparklyPaper-Parallel-world-ticking.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0050-Leaves-Protocol-Core.patch",
+      "status": "covered-by-base",
+      "reason": "Leaves Protocol Core, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0195-Protocol-Core.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0051-Paper-PR-Optimise-non-flush-packet-sending.patch",
+      "status": "covered-by-base",
+      "reason": "Paper PR non-flush packet sending, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0186-Optimise-non-flush-packet-sending.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0060-lithium-sleeping_block_entity.patch",
+      "status": "covered-by-base",
+      "reason": "Lithium sleeping block entities through Leaves, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0284-Leaves-Lithium-Sleeping-Block-Entity.patch", "tintedpaper-server/minecraft-patches/features/0285-fixup-Leaves-Lithium-Sleeping-Block-Entity.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0061-lithium-equipment_tracking.patch",
+      "status": "covered-by-base",
+      "reason": "Lithium equipment tracking, same upstream source.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0228-Lithium-equipment-tracking.patch"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0052-Linear-region-file-format.patch",
+      "status": "covered-by-base",
+      "reason": "Leaf already ships a buffered linear region format behind a configurable region format framework; the DivineMC format would be a second, incompatible implementation of the same idea.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0098-Luminol-Configurable-region-format-framework.patch", "tintedpaper-server/src/main/java/me/earthme/luminol/data/BufferedLinearRegionFile.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0033-Command-block-parse-results-caching.patch",
+      "status": "not-ported",
+      "reason": "Unsafe as written: it keeps ParseResults built with the CommandSourceStack of an earlier tick and executes them later, so a changed source (moved command block minecart, permission level, executor) and a /reload that replaces the command tree both run against stale state. A correct version must key the cache on the command tree generation and rebuild the source every execution.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0017-ModernFix-compact_bit_storage.patch",
+      "status": "not-ported",
+      "reason": "It only changes PalettedContainer.read(FriendlyByteBuf), which the server never calls (the source comment says so); there is no server-side effect.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0041-Clump-experience-orbs.patch",
+      "status": "not-ported",
+      "reason": "Replaces Paper experience orb merging and its events with a per-value count map and changes how mending distributes experience; it conflicts with Paper merge behavior and plugin-visible semantics.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0013-Optimize-entities.patch",
+      "status": "not-ported",
+      "reason": "Rewrites Brain memory storage, which overlaps and would conflict with the inherited Leaf and Pufferfish Brain optimizations.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0045-Regionized-Chunk-Ticking.patch",
+      "status": "not-ported",
+      "reason": "Depends on DivineMC org.bxteam.divinemc.async.rct.RegionizedChunkTicking, which this fork does not have; the 26.2 DPO migration notes reached the same conclusion for its RegionSinglePhaseMixin.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0010-Async-locate-command.patch",
+      "status": "deferred",
+      "reason": "Runs structure search off the main thread against chunk generation state; needs a thread-safety review of ChunkGenerator and the structure caches before it is introduced.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0032-Async-Chunk-Sending.patch",
+      "status": "deferred",
+      "reason": "Builds and fills chunk packets on a pool after the packet is queued, which interacts with the chunk wire guard and anti-xray; needs its own validation against the 26.3 packet format.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0030-Lag-compensation.patch",
+      "status": "deferred",
+      "reason": "Adds a TPS calculator and scales entity and block timing by it; Paper already compensates some timers, so each scaled mechanic must be reviewed for vanilla parity first.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0029-Implement-NoChatReports.patch",
+      "status": "deferred",
+      "reason": "Strips chat signatures and edits the server status and chat packets; it needs compatibility testing with ViaVersion, Geyser and chat plugins and overlaps the inherited not-secure marker handling.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0058-Optimize-Moonrise.patch",
+      "status": "deferred",
+      "reason": "Large rewrite of Moonrise chunk system collections; needs per-hunk review against the Moonrise version in this fork.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0066-C2ME-native-math-optimization.patch",
+      "status": "deferred",
+      "reason": "Requires native libraries and their loading and licensing; not suitable for the single-JAR distribution without a separate decision.",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0067-Parallel-sensor-phase.patch",
+      "status": "deferred",
+      "reason": "Depends on DivineMC regionized parallel tick phases (see 0045).",
+      "evidence": []
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0068-Raytrace-Entity-Culling.patch",
+      "status": "deferred",
+      "reason": "Server-side port of the EntityCulling ray tracing; needs its supporting ray tracing sources, and overlaps the inherited anti-xray integration and client-side culling mods.",
+      "evidence": []
     }
   ],
   "compatibilityFixes": [
@@ -347,10 +533,5 @@
       "evidence": ["tintedpaper-server/src/minecraft/java/io/papermc/paper/inventory/recipe/StackedContentsExtrasMap.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/item/crafting/Ingredient.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineShapelessGuardTest.java"]
     }
   ],
-  "pendingReview": [
-    "The nine active DivineMC API feature patches now have recorded ports, retained base implementations or project-specific decisions. API build/dependency and remaining server/native/supporting-source work is not implied complete.",
-    "All active Minecraft feature patches not recorded above. Preliminary title matches are not sufficient to classify a patch as covered.",
-    "All remaining Paper server feature and single-file patches, Purpur patches, supporting Java sources, dependencies and native resources.",
-    "Partial duplicates require review of each remaining behavior before porting. Threaded features require ownership, lifecycle and shutdown review."
-  ]
+  "pendingReview": ["The nine active DivineMC API feature patches now have recorded ports, retained base implementations or project-specific decisions. API build/dependency and remaining server/native/supporting-source work is not implied complete.", "All active Minecraft feature patches not recorded above. Preliminary title matches are not sufficient to classify a patch as covered.", "All remaining Paper server feature and single-file patches, Purpur patches, supporting Java sources, dependencies and native resources.", "Partial duplicates require review of each remaining behavior before porting. Threaded features require ownership, lifecycle and shutdown review."]
 }

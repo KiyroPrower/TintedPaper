@@ -1,0 +1,81 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sodium <sodium@kiyro.dev>
+Date: Sat, 14 Nov 2026 09:06:47 -0300
+Subject: [PATCH] Verify spectator hiding and update suppressor exception
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineRemainingPortsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineRemainingPortsTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..810e5369896ed5258a893a1687bd4dd7e3a4ac90
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineRemainingPortsTest.java
+@@ -0,0 +1,69 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.util.EnumSet;
++import java.util.List;
++import java.util.UUID;
++import net.minecraft.core.BlockPos;
++import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
++import net.minecraft.world.level.GameType;
++import org.bukkit.support.environment.AllFeatures;
++import org.dreeam.leaf.config.modules.network.SpectatorPackets;
++import org.dreeam.leaf.util.SpectatorFilter;
++import org.dreeam.leaf.util.UpdateSuppressorException;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++@AllFeatures
++class DivineRemainingPortsTest {
++    private final boolean hide = SpectatorPackets.hideSpectatorGameMode;
++
++    @AfterEach
++    void restoreConfig() {
++        SpectatorPackets.hideSpectatorGameMode = this.hide;
++    }
++
++    private static ClientboundPlayerInfoUpdatePacket.Entry entry(GameType mode) {
++        return new ClientboundPlayerInfoUpdatePacket.Entry(UUID.randomUUID(), null, true, 7, mode, null, true, 3, null);
++    }
++
++    private static ClientboundPlayerInfoUpdatePacket packet(ClientboundPlayerInfoUpdatePacket.Entry... entries) {
++        return new ClientboundPlayerInfoUpdatePacket(EnumSet.of(ClientboundPlayerInfoUpdatePacket.Action.UPDATE_GAME_MODE), List.of(entries));
++    }
++
++    @Test
++    void spectatorEntriesAreShownAsSurvivalOnlyWhenHidingIsEnabled() {
++        var spectator = entry(GameType.SPECTATOR);
++        var creative = entry(GameType.CREATIVE);
++        var original = packet(spectator, creative);
++
++        SpectatorPackets.hideSpectatorGameMode = false;
++        assertSame(original, SpectatorFilter.hide(original), "disabled: the very same packet is sent");
++
++        SpectatorPackets.hideSpectatorGameMode = true;
++        var hidden = SpectatorFilter.hide(original);
++        assertNotSame(original, hidden);
++        assertEquals(original.actions(), hidden.actions());
++        assertEquals(GameType.SURVIVAL, hidden.entries().get(0).gameMode());
++        assertEquals(GameType.CREATIVE, hidden.entries().get(1).gameMode());
++        assertEquals(spectator.profileId(), hidden.entries().get(0).profileId());
++        assertEquals(spectator.latency(), hidden.entries().get(0).latency());
++        assertEquals(spectator.listOrder(), hidden.entries().get(0).listOrder());
++        assertEquals(GameType.SPECTATOR, original.entries().get(0).gameMode(), "the original is never modified");
++    }
++
++    @Test
++    void packetsWithoutSpectatorsAreSentUnchanged() {
++        SpectatorPackets.hideSpectatorGameMode = true;
++        var survival = packet(entry(GameType.SURVIVAL), entry(GameType.ADVENTURE));
++        assertSame(survival, SpectatorFilter.hide(survival));
++    }
++
++    @Test
++    void updateSuppressorExceptionCarriesNoStackTrace() {
++        var failure = new UpdateSuppressorException(new BlockPos(1, 2, 3), "block");
++        assertEquals(0, failure.getStackTrace().length);
++        assertEquals("Update suppressed at 1, 2, 3 by block", failure.getMessage());
++    }
++}
