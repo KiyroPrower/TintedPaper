@@ -1,0 +1,59 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 13:08:09 -0300
+Subject: [PATCH] Defer eligible explorer map lookup until native item use
+
+Native adaptation of BetterMaps by Nerjal (MIT). Preserve Paper treasure-map settings, structure claim policy, map-fill event and inventory flow. Restrict client-held metadata to named structure sets and vanilla-sized searches; retain owner-thread resolution and original behavior for other requests.
+
+diff --git a/net/minecraft/world/item/EmptyMapItem.java b/net/minecraft/world/item/EmptyMapItem.java
+index 7a16afda0a47f71de370b1a894489b5c59b8363b..fe50de42c55ee01dc64f148da9bcda377325ded0 100644
+--- a/net/minecraft/world/item/EmptyMapItem.java
++++ b/net/minecraft/world/item/EmptyMapItem.java
+@@ -18,11 +18,18 @@ public class EmptyMapItem extends Item {
+     public InteractionResult use(final Level level, final Player player, final InteractionHand hand) {
+         ItemStack itemStack = player.getItemInHand(hand);
+         if (level instanceof ServerLevel serverLevel) {
++            ItemStack deferredMap = org.dreeam.leaf.util.maps.DeferredExplorerMaps.resolve(serverLevel, itemStack);
++            if (deferredMap != null) {
++                player.getCooldowns().addCooldown(itemStack, 20);
++                if (deferredMap.isEmpty()) {
++                    return InteractionResult.FAIL;
++                }
++            }
+             org.bukkit.inventory.ItemStack emptyMap = org.bukkit.craftbukkit.inventory.CraftItemStack.asBukkitCopy(itemStack); // Paper - PlayerMapFilledEvent
+             itemStack.consume(1, player);
+             player.awardStat(Stats.ITEM_USED.get(this));
+             serverLevel.playSound(null, player, SoundEvents.UI_CARTOGRAPHY_TABLE_TAKE_RESULT, player.getSoundSource(), 1.0F, 1.0F);
+-            ItemStack map = MapItem.create(serverLevel, player.getBlockX(), player.getBlockZ(), (byte)0, true, false);
++            ItemStack map = deferredMap != null ? deferredMap : MapItem.create(serverLevel, player.getBlockX(), player.getBlockZ(), (byte)0, true, false);
+             // Paper start - PlayerMapFilledEvent
+             io.papermc.paper.event.player.PlayerMapFilledEvent event = new io.papermc.paper.event.player.PlayerMapFilledEvent((org.bukkit.entity.Player) player.getBukkitEntity(), emptyMap, org.bukkit.craftbukkit.inventory.CraftItemStack.asBukkitMirror(map));
+             event.callEvent();
+diff --git a/net/minecraft/world/level/storage/loot/functions/ExplorationMapFunction.java b/net/minecraft/world/level/storage/loot/functions/ExplorationMapFunction.java
+index 058afc8fa19935df1abc60a5a7aab34d3797ae97..11b43b7601ecf03a5797e9ea7593c134a89bfc56 100644
+--- a/net/minecraft/world/level/storage/loot/functions/ExplorationMapFunction.java
++++ b/net/minecraft/world/level/storage/loot/functions/ExplorationMapFunction.java
+@@ -94,6 +94,23 @@ public class ExplorationMapFunction extends LootItemConditionalFunction {
+         // works for all plain vanilla usecases.
+         final boolean runningForVillagerTrade = context.hasParameter(LootContextParams.ADDITIONAL_COST_COMPONENT_ALLOWED)
+             && context.getOptional(LootContextParams.THIS_ENTITY) instanceof net.minecraft.world.entity.npc.villager.AbstractVillager;
++        // TintedPaper - BetterMaps: keep native resolution for disabled treasure maps and unsupported requests.
++        if (level.paperConfig().environment.treasureMaps.enabled) {
++            ItemStack deferred = org.dreeam.leaf.util.maps.DeferredExplorerMaps.defer(this, itemStack, level, lootBlockPos, runningForVillagerTrade);
++            if (deferred != null) {
++                return deferred;
++            }
++        }
++        return this.tintedCreateMap(itemStack, level, lootBlockPos, runningForVillagerTrade);
++    }
++
++    public boolean tintedCanDefer() {
++        // shortcut: accept only named sets and vanilla-sized client-held requests; authenticate metadata before expanding these limits.
++        return this.getClass() == ExplorationMapFunction.class && this.destination instanceof HolderSet.Named<?>
++            && this.searchRadius >= 0 && this.searchRadius <= DEFAULT_SEARCH_RADIUS && this.zoom >= 0 && this.zoom <= 4;
++    }
++
++    public ItemStack tintedCreateMap(final ItemStack itemStack, final ServerLevel level, final BlockPos lootBlockPos, final boolean runningForVillagerTrade) {
+         if (!level.paperConfig().environment.treasureMaps.enabled) {
+             /*
+              * NOTE: I fear users will just get a plain map as their "treasure"
