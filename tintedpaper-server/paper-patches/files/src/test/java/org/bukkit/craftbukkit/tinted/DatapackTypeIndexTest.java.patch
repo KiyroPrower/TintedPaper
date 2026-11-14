@@ -1,0 +1,134 @@
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DatapackTypeIndexTest.java
+@@ -1,0 +_,131 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.papermc.paper.configuration.WorldConfiguration;
++import it.unimi.dsi.fastutil.objects.Reference2ObjectOpenHashMap;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.UUID;
++import net.minecraft.core.RegistryAccess;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.entity.Entity;
++import net.minecraft.world.entity.EntityTypes;
++import net.minecraft.world.entity.Marker;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.entity.EntityTypeTest;
++import org.bukkit.craftbukkit.CraftWorld;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.util.selector.EntityTypeIndex;
++import org.dreeam.leaf.util.selector.TypeIndexScan;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.purpurmc.purpur.PurpurWorldConfig;
++import org.spigotmc.SpigotWorldConfig;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DatapackTypeIndexTest {
++    private static final EntityTypeTest<Entity, Entity> ANY = EntityTypeTest.forClass(Entity.class);
++
++    private static ServerLevel level() throws Exception {
++        ServerLevel level = mock(ServerLevel.class);
++        var purpurConfig = Level.class.getField("purpurConfig");
++        purpurConfig.setAccessible(true);
++        purpurConfig.set(level, mock(PurpurWorldConfig.class));
++        var spigotConfig = Level.class.getField("spigotConfig");
++        spigotConfig.setAccessible(true);
++        spigotConfig.set(level, mock(SpigotWorldConfig.class));
++        WorldConfiguration config = mock(WorldConfiguration.class);
++        config.entities = mock(WorldConfiguration.Entities.class);
++        config.entities.spawning = mock(WorldConfiguration.Entities.Spawning.class);
++        config.entities.spawning.despawnTime = new Reference2ObjectOpenHashMap<>();
++        when(level.paperConfig()).thenReturn(config);
++        when(level.getNextEntityId()).thenReturn(1);
++        when(level.registryAccess()).thenReturn(RegistryAccess.EMPTY);
++        CraftWorld world = mock(CraftWorld.class);
++        when(world.getUID()).thenReturn(new UUID(1, 2));
++        when(level.getWorld()).thenReturn(world);
++        var tagIndex = ServerLevel.class.getField("typeIndex");
++        tagIndex.setAccessible(true);
++        tagIndex.set(level, new EntityTypeIndex());
++        return level;
++    }
++
++    /** A tracked marker: in the level's lookup and in its type index, like an entity after onTrackingStart. */
++    private static Marker tracked(ServerLevel level, int id) {
++        Marker marker = new Marker(EntityTypes.MARKER, level);
++        marker.setId(id);
++        level.typeIndex.add(marker);
++        when(level.getEntity(id)).thenReturn(marker);
++        return marker;
++    }
++
++    @BeforeEach
++    @AfterEach
++    void reset() {
++        TypeIndexScan.DISABLED.set(false);
++        TypeIndexScan.VERIFIED.set(0);
++    }
++
++    @Test
++    void concreteTypeReturnsEveryTrackedMatchThePredicateAccepts() throws Exception {
++        ServerLevel level = level();
++        Marker a = tracked(level, 1);
++        Marker b = tracked(level, 2);
++        Marker c = tracked(level, 3);
++        List<Entity> result = TypeIndexScan.collect(EntityTypes.MARKER, null, level, e -> e != c, false);
++        assertNotNull(result);
++        assertEquals(2, result.size());
++        assertTrue(result.contains(a) && result.contains(b));
++        assertEquals(List.of(), TypeIndexScan.collect(EntityTypes.ARMOR_STAND, null, level, e -> true, false));
++    }
++
++    @Test
++    void removedEntitiesAndEntitiesNotInTheLookupAreSkipped() throws Exception {
++        ServerLevel level = level();
++        Marker gone = tracked(level, 1);
++        tracked(level, 2);
++        Marker live = tracked(level, 3);
++        var removalReason = Entity.class.getDeclaredField("removalReason");
++        removalReason.setAccessible(true);
++        removalReason.set(gone, Entity.RemovalReason.DISCARDED);
++        when(level.getEntity(2)).thenReturn(null);
++        assertEquals(List.of(live), TypeIndexScan.collect(EntityTypes.MARKER, null, level, e -> true, false));
++    }
++
++    @Test
++    void limitedScanIsServedOnlyForZeroOrOneMatch() throws Exception {
++        ServerLevel level = level();
++        Marker one = tracked(level, 1);
++        assertEquals(List.of(one), TypeIndexScan.collect(EntityTypes.MARKER, null, level, e -> true, true));
++        tracked(level, 2);
++        assertNull(TypeIndexScan.collect(EntityTypes.MARKER, null, level, e -> true, true), "two matches: vanilla decides order and cut");
++        assertEquals(List.of(), TypeIndexScan.collect(EntityTypes.MARKER, null, level, e -> false, true));
++    }
++
++    @Test
++    void anUntaggedNonConcreteTypeUsesTheNativeScan() throws Exception {
++        assertNull(TypeIndexScan.collect(ANY, null, level(), e -> true, false));
++    }
++
++    @Test
++    void indexRemovalStopsServingTheEntity() throws Exception {
++        ServerLevel level = level();
++        Marker entity = tracked(level, 1);
++        level.typeIndex.remove(entity);
++        assertEquals(List.of(), TypeIndexScan.collect(EntityTypes.MARKER, null, level, e -> true, false));
++    }
++
++    @Test
++    void aMismatchDisablesTheIndexAndAgreementCountsASample() throws Exception {
++        ServerLevel level = level();
++        Marker a = tracked(level, 1);
++        assertTrue(TypeIndexScan.verified(List.of(a), List.of(a)));
++        assertEquals(1, TypeIndexScan.VERIFIED.get());
++        assertFalse(TypeIndexScan.verified(List.of(a), List.of()));
++        assertTrue(TypeIndexScan.DISABLED.get());
++        assertNull(TypeIndexScan.collect(EntityTypes.MARKER, null, level, e -> true, false));
++    }
++}
