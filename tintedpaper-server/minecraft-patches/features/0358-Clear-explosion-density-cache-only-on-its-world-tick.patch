@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 13:14:12 -0300
+Subject: [PATCH] Clear explosion density cache only on its world tick owner
+
+
+diff --git a/net/minecraft/server/MinecraftServer.java b/net/minecraft/server/MinecraftServer.java
+index dacc1a6af8c3cd2b1fb8fe845f1848bc08249248..c89864df32dd96dde1dfbd606d38eba52f965a9c 100644
+--- a/net/minecraft/server/MinecraftServer.java
++++ b/net/minecraft/server/MinecraftServer.java
+@@ -1864,6 +1864,8 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+             CrashReport report = CrashReport.forThrowable(t, "Exception ticking world");
+             level.fillReportDetails(report);
+             throw new ReportedException(report);
++        } finally {
++            level.explosionDensityCache.clear(); // TintedPaper - clean per-tick data on the world owner, after all tick accesses
+         }
+     }
+     // Leaf end - SparklyPaper - parallel world ticking - move level ticking logic out for branch convergence
+@@ -1952,7 +1954,6 @@ public abstract class MinecraftServer extends ReentrantBlockableEventLoop<TickTa
+ 
+             profiler.pop();
+             profiler.pop();
+-            level.explosionDensityCache.clear(); // Paper - Optimize explosions
+         }
+             while (tasks != null && !tasks.isEmpty()) { // Leaf - Avoid allocating world tick queue without PWT
+                 final ServerLevel serverLevel = tasks.poll().get(); // Leaf - thread unsafe chunk map

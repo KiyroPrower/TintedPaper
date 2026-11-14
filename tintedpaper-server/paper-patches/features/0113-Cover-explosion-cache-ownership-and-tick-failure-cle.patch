@@ -1,0 +1,123 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 13:14:13 -0300
+Subject: [PATCH] Cover explosion cache ownership and tick failure cleanup
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/WorldTickExplosionCacheTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/WorldTickExplosionCacheTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..55005fe621a818ff8ea855d70dde4a580dac4337
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/WorldTickExplosionCacheTest.java
+@@ -0,0 +1,111 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.lang.reflect.Field;
++import java.lang.reflect.InvocationTargetException;
++import java.lang.reflect.Method;
++import java.util.HashMap;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.Executors;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicReference;
++import java.util.function.BooleanSupplier;
++import net.minecraft.core.BlockPos;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.level.Level;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.fixes.UpdateSuppression;
++import org.dreeam.leaf.util.UpdateSuppressorException;
++import org.junit.jupiter.api.Test;
++import org.junit.jupiter.api.Timeout;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++@Timeout(20)
++class WorldTickExplosionCacheTest {
++    private static ServerLevel level(HashMap<Object, Float> cache) throws Exception {
++        ServerLevel level = mock(ServerLevel.class);
++        Field density = Level.class.getField("explosionDensityCache");
++        density.setAccessible(true);
++        density.set(level, cache);
++        for (String name : new String[]{"tickTimes5s", "tickTimes10s", "tickTimes1m"}) {
++            Field times = ServerLevel.class.getField(name);
++            times.setAccessible(true);
++            times.set(level, mock(times.getType()));
++        }
++        return level;
++    }
++
++    private static void tick(MinecraftServer server, ServerLevel level) throws Exception {
++        Method tick = MinecraftServer.class.getDeclaredMethod("tickLevel", ServerLevel.class, BooleanSupplier.class);
++        tick.setAccessible(true);
++        tick.invoke(server, level, (BooleanSupplier) () -> true);
++    }
++
++    @Test
++    void cacheIsClearedByTheWorldWorkerOnlyAfterItsTickCompletes() throws Exception {
++        AtomicReference<Thread> clearingThread = new AtomicReference<>();
++        HashMap<Object, Float> cache = new HashMap<>() {
++            @Override
++            public void clear() {
++                clearingThread.set(Thread.currentThread());
++                super.clear();
++            }
++        };
++        Object key = new Object();
++        cache.put(key, 0.75F);
++        ServerLevel level = level(cache);
++        MinecraftServer server = mock(MinecraftServer.class, CALLS_REAL_METHODS);
++        CountDownLatch entered = new CountDownLatch(1);
++        CountDownLatch release = new CountDownLatch(1);
++        AtomicReference<Thread> worldThread = new AtomicReference<>();
++        doAnswer(call -> {
++            worldThread.set(Thread.currentThread());
++            assertEquals(0.75F, cache.get(key));
++            entered.countDown();
++            assertTrue(release.await(5, TimeUnit.SECONDS));
++            assertEquals(0.75F, cache.get(key));
++            return null;
++        }).when(level).tick(any(BooleanSupplier.class));
++        try (var executor = Executors.newSingleThreadExecutor()) {
++            var future = executor.submit(() -> { tick(server, level); return null; });
++            try {
++                assertTrue(entered.await(5, TimeUnit.SECONDS));
++                assertEquals(0.75F, cache.get(key));
++                assertNull(clearingThread.get());
++            } finally {
++                release.countDown();
++            }
++            future.get(5, TimeUnit.SECONDS);
++        }
++        assertTrue(cache.isEmpty(), "per-tick data must not survive the world tick");
++        assertSame(worldThread.get(), clearingThread.get(), "the main thread must not clear a running world's map");
++    }
++
++    @Test
++    void suppressedAndPropagatedUpdateFailuresStillClearTheCache() throws Exception {
++        boolean previous = UpdateSuppression.crashFix;
++        try {
++            for (boolean suppress : new boolean[]{true, false}) {
++                UpdateSuppression.crashFix = suppress;
++                HashMap<Object, Float> cache = new HashMap<>();
++                cache.put(new Object(), 1F);
++                ServerLevel level = level(cache);
++                UpdateSuppressorException failure = new UpdateSuppressorException(BlockPos.ZERO, "test");
++                doThrow(failure).when(level).tick(any(BooleanSupplier.class));
++                MinecraftServer server = mock(MinecraftServer.class, CALLS_REAL_METHODS);
++                if (suppress) {
++                    tick(server, level);
++                } else {
++                    InvocationTargetException error = assertThrows(InvocationTargetException.class, () -> tick(server, level));
++                    assertSame(failure, error.getCause());
++                }
++                assertTrue(cache.isEmpty());
++            }
++        } finally {
++            UpdateSuppression.crashFix = previous;
++        }
++    }
++}
