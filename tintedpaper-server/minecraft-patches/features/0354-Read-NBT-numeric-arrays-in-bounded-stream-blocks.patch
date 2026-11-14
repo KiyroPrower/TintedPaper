@@ -1,0 +1,75 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 12:44:14 -0300
+Subject: [PATCH] Read NBT numeric arrays in bounded stream blocks
+
+Adapted from Lomka by Starlev and contributors, https://github.com/Starlevka/Lomka at 5d8bf834d5d3efa783ecad0c3d2fb15a5634550f. This contribution is licensed under LGPL-3.0-only; see licenses/LGPL-3.0.txt. Retain Paper length validation, quotas and shared load/parse paths.
+
+diff --git a/net/minecraft/nbt/IntArrayTag.java b/net/minecraft/nbt/IntArrayTag.java
+index 45a90ea9348ecba985e78d0007527a39e6cdf680..dec996ccb6701010aa1f080bfc00f947c0beb9fa 100644
+--- a/net/minecraft/nbt/IntArrayTag.java
++++ b/net/minecraft/nbt/IntArrayTag.java
+@@ -1,6 +1,7 @@
+ package net.minecraft.nbt;
+ 
+ import java.io.DataInput;
++import java.io.DataInputStream;
+ import java.io.DataOutput;
+ import java.io.IOException;
+ import java.util.Arrays;
+@@ -49,6 +50,21 @@ public final class IntArrayTag implements CollectionTag {
+             accounter.accountBytes(4L, length);
+             int[] data = new int[length];
+ 
++            // TintedPaper start - Lomka bulk stream reads (Starlev and contributors, LGPL-3.0-only)
++            // https://github.com/Starlevka/Lomka - retain Paper accounting above and the non-stream path below.
++            if (input instanceof DataInputStream && length != 0) {
++                byte[] scratch = new byte[Math.min(length, 2048) * Integer.BYTES];
++                java.nio.IntBuffer buffer = java.nio.ByteBuffer.wrap(scratch).asIntBuffer();
++                for (int offset = 0; offset < length;) {
++                    int count = Math.min(buffer.capacity(), length - offset);
++                    input.readFully(scratch, 0, count * Integer.BYTES);
++                    buffer.position(0);
++                    buffer.get(data, offset, count);
++                    offset += count;
++                }
++                return data;
++            }
++            // TintedPaper end - Lomka bulk stream reads
+             for (int i = 0; i < length; i++) {
+                 data[i] = input.readInt();
+             }
+diff --git a/net/minecraft/nbt/LongArrayTag.java b/net/minecraft/nbt/LongArrayTag.java
+index dae37d0ca76da5c17e2f784cf006dfd62eadaa84..218fd7bf3ed3fa25462c954513540184c93fdcb0 100644
+--- a/net/minecraft/nbt/LongArrayTag.java
++++ b/net/minecraft/nbt/LongArrayTag.java
+@@ -1,6 +1,7 @@
+ package net.minecraft.nbt;
+ 
+ import java.io.DataInput;
++import java.io.DataInputStream;
+ import java.io.DataOutput;
+ import java.io.IOException;
+ import java.util.Arrays;
+@@ -49,6 +50,21 @@ public final class LongArrayTag implements CollectionTag {
+             accounter.accountBytes(8L, length);
+             long[] data = new long[length];
+ 
++            // TintedPaper start - Lomka bulk stream reads (Starlev and contributors, LGPL-3.0-only)
++            // https://github.com/Starlevka/Lomka - retain Paper accounting above and the non-stream path below.
++            if (input instanceof DataInputStream && length != 0) {
++                byte[] scratch = new byte[Math.min(length, 1024) * Long.BYTES];
++                java.nio.LongBuffer buffer = java.nio.ByteBuffer.wrap(scratch).asLongBuffer();
++                for (int offset = 0; offset < length;) {
++                    int count = Math.min(buffer.capacity(), length - offset);
++                    input.readFully(scratch, 0, count * Long.BYTES);
++                    buffer.position(0);
++                    buffer.get(data, offset, count);
++                    offset += count;
++                }
++                return data;
++            }
++            // TintedPaper end - Lomka bulk stream reads
+             for (int i = 0; i < length; i++) {
+                 data[i] = input.readLong();
+             }

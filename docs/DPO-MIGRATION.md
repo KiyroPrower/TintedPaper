@@ -41,6 +41,8 @@ decision entries fail rather than disappearing from the inventory.
   and every mutation of the live Bukkit tag set. Limited/ordered queries use the
   index only for zero or one candidate, falling back before evaluating predicates
   otherwise. The index remains current when its query toggle is disabled.
+  Selectors with `predicate=` retain the native scan, since loot predicates can
+  consume random state even for entities that do not have the requested tag.
 - Team saves omit invalid null members while retaining valid members and leaving
   the live team untouched. Normal saves still use the native fast path.
 - Tracked scoreboard holders are collected without relying on the fastutil size

@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 12:44:13 -0300
+Subject: [PATCH] Keep random loot predicates on the original entity scan
+
+
+diff --git a/net/minecraft/commands/arguments/selector/EntitySelectorParser.java b/net/minecraft/commands/arguments/selector/EntitySelectorParser.java
+index 04c1f87bf2163c37a07700588d7b27927fc1d841..522babf6fd6c8bf38bbb2ec4a0bff9008ad9e569 100644
+--- a/net/minecraft/commands/arguments/selector/EntitySelectorParser.java
++++ b/net/minecraft/commands/arguments/selector/EntitySelectorParser.java
+@@ -92,6 +92,11 @@ public class EntitySelectorParser {
+     private final List<Predicate<Entity>> predicates = new ArrayList<>();
+     private @Nullable Predicate<Entity> tinted$aliveCheck; // TintedPaper - DPO selector predicate ordering
+     private @Nullable List<String> tintedPositiveTags; // TintedPaper - DatapackOptimizer: tag index
++    private boolean tintedTagIndexSafe = true;
++
++    public void tintedDisableTagIndex() {
++        this.tintedTagIndexSafe = false;
++    }
+ 
+     // TintedPaper start - DatapackOptimizer: tag index
+     public void addPositiveTag(final String tag) {
+@@ -180,7 +185,7 @@ public class EntitySelectorParser {
+             this.type,
+             this.usesSelectors
+         );
+-        selector.tintedPositiveTags = this.tintedPositiveTags == null ? null : List.copyOf(this.tintedPositiveTags); // TintedPaper - DatapackOptimizer: tag index
++        selector.tintedPositiveTags = !this.tintedTagIndexSafe || this.tintedPositiveTags == null ? null : List.copyOf(this.tintedPositiveTags); // TintedPaper - DatapackOptimizer: tag index
+         return selector;
+     }
+ 
+diff --git a/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java b/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
+index bea463cd5320739eea0f0c11767fc2844558cd8e..935018b44876a8131f4905167ce5409260c420d3 100644
+--- a/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
++++ b/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
+@@ -489,6 +489,7 @@ public class EntitySelectorOptions {
+             register(
+                 "predicate",
+                 parser -> {
++                    parser.tintedDisableTagIndex(); // TintedPaper - loot predicates can consume random state, even for entities without the requested tag
+                     boolean inverted = parser.shouldInvertValue();
+                     ResourceKey<LootItemCondition> id = ResourceKey.create(Registries.PREDICATE, Identifier.read(parser.getReader()));
+                     parser.addPredicate(
