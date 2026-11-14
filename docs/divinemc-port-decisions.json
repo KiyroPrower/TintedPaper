@@ -272,6 +272,25 @@
       "status": "covered-by-base",
       "reason": "PaperPluginManagerImpl.useTimings already returns false through the inherited Timings removal patch. Preserve the existing implementation and retained no-op API compatibility class instead of deleting it.",
       "evidence": ["tintedpaper-server/paper-patches/features/0028-Remove-Timings.patch", "paper-server/src/main/java/io/papermc/paper/plugin/manager/PaperPluginManagerImpl.java", "paper-api/src/main/java/co/aikar/timings/Timings.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0018-Option-to-disable-disconnect.spam.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Add the source's opt-in spam-disconnect suppression while retaining tab-completion and recipe rate limits, oversized-command guards and malformed-tag rejection. Suppress only the kick; do not continue expensive work after rejection. A rejected main-thread suggestion request completes with empty suggestions even if the connection stays open. Shared chat/command counters and operator/singleplayer exemptions retain their existing behavior; the option does not introduce additional message processing.",
+      "config": ["network.disable-disconnect-spam"],
+      "evidence": ["tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/network/SpamChecks.java", "tintedpaper-server/src/minecraft/java/net/minecraft/server/network/ServerGamePacketListenerImpl.java", "tintedpaper-server/src/minecraft/java/net/minecraft/server/network/ServerCommandSuggestionsProvider.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineSpamPolicyTest.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0005-Paper-PR-Throttle-failed-spawn-attempts.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited Paper proposal already tracks failed attempts per chunk/category, applies the configured failed-attempt interval to per-player spawning and persists Paper.FailedSpawnAttempts. Retain the base's compatibility overloads, existing generator reuse and single array copy when restoring counters instead of importing duplicate APIs or DivineMC's repeated array-copy loop. The additional Leaf probabilistic throttle remains a separate existing option. This is feature coverage, not a new claim of snapshot/thread safety.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0181-Paper-PR-Throttle-failed-spawn-attempts.patch", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/NaturalSpawner.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/chunk/ChunkAccess.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/chunk/storage/SerializableChunkData.java"]
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0007-Paper-PR-Throttle-failed-spawn-attempts.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited per-world SpawningThrottle configuration already exposes the same disabled-by-default threshold and category-specific throttled intervals. Keep the current configuration and native implementation together rather than register a second copy.",
+      "evidence": ["tintedpaper-server/paper-patches/features/0047-Paper-PR-Throttle-failed-spawn-attempts.patch", "paper-server/src/main/java/io/papermc/paper/configuration/WorldConfiguration.java"]
     }
   ],
   "compatibilityFixes": [

@@ -4,8 +4,8 @@
   "meaning": "Complete path inventory of active patch trees and module-owned src files at the recorded commit; filenames and pending status are not semantic verification or a claim that every supporting file needs copying. Historical removed patches and Git/build caches are excluded.",
   "counts": {
     "patches": 150,
-    "patchesWithDecision": 41,
-    "patchesPendingReview": 109,
+    "patchesWithDecision": 44,
+    "patchesPendingReview": 106,
     "supportingSourceAndResourceFiles": 258
   },
   "patches": [
@@ -75,7 +75,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0005-Paper-PR-Throttle-failed-spawn-attempts.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0006-Raytrace-AntiXray-SDK-integration.patch",
@@ -127,7 +127,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0018-Option-to-disable-disconnect.spam.patch",
-      "status": "pending-review"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0019-Option-to-disable-saving-of-snowball-and-firework.patch",
@@ -503,7 +503,7 @@
     },
     {
       "source": "divinemc-server/paper-patches/features/0007-Paper-PR-Throttle-failed-spawn-attempts.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/paper-patches/features/0008-Optimize-default-values-for-configs.patch",
