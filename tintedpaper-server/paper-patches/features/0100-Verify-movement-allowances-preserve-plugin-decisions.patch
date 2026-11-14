@@ -1,0 +1,114 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 07:01:00 -0300
+Subject: [PATCH] Verify movement allowances preserve plugin decisions and
+ protected failure reasons
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineMovementPolicyTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineMovementPolicyTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..7567937bdcecc5a86c2082d41c513571f01b00b4
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineMovementPolicyTest.java
+@@ -0,0 +1,101 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.papermc.paper.event.player.PlayerFailMoveEvent;
++import io.papermc.paper.event.player.PlayerFailMoveEvent.FailReason;
++import java.lang.reflect.Method;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.server.network.ServerGamePacketListenerImpl;
++import org.bukkit.Bukkit;
++import org.bukkit.World;
++import org.bukkit.craftbukkit.entity.CraftPlayer;
++import org.bukkit.plugin.PluginManager;
++import org.bukkit.support.environment.AllFeatures;
++import org.dreeam.leaf.config.modules.fixes.MovementChecks;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.ArgumentMatchers.any;
++import static org.mockito.Mockito.*;
++
++@AllFeatures
++class DivineMovementPolicyTest {
++    private final boolean oldWeird = MovementChecks.alwaysAllowWeirdMovement;
++    private final boolean oldLag = MovementChecks.ignoreMovedTooQuicklyWhenLagging;
++
++    @AfterEach
++    void restoreConfig() {
++        MovementChecks.alwaysAllowWeirdMovement = this.oldWeird;
++        MovementChecks.ignoreMovedTooQuicklyWhenLagging = this.oldLag;
++    }
++
++    @Test
++    void policyOnlyAllowsTheConfiguredFailureReasons() throws Exception {
++        for (boolean weird : new boolean[] {false, true}) {
++            for (boolean ignoreLag : new boolean[] {false, true}) {
++                for (boolean lagging : new boolean[] {false, true}) {
++                    MovementChecks.alwaysAllowWeirdMovement = weird;
++                    MovementChecks.ignoreMovedTooQuicklyWhenLagging = ignoreLag;
++                    for (FailReason reason : FailReason.values()) {
++                        boolean expected = switch (reason) {
++                            case MOVED_TOO_QUICKLY -> weird || ignoreLag && lagging;
++                            case MOVED_WRONGLY -> weird;
++                            default -> false;
++                        };
++                        assertEquals(expected, this.fire(reason, lagging, null).isAllowed(), reason.name());
++                    }
++                }
++            }
++        }
++    }
++
++    @Test
++    void pluginsCanRejectAMoveAllowedByConfiguration() throws Exception {
++        MovementChecks.alwaysAllowWeirdMovement = true;
++        assertFalse(this.fire(FailReason.MOVED_TOO_QUICKLY, false, false).isAllowed());
++        assertFalse(this.fire(FailReason.MOVED_WRONGLY, false, false).isAllowed());
++    }
++
++    @Test
++    void pluginsRetainTheirExistingAbilityToAllowMoves() throws Exception {
++        MovementChecks.alwaysAllowWeirdMovement = false;
++        MovementChecks.ignoreMovedTooQuicklyWhenLagging = false;
++        assertTrue(this.fire(FailReason.MOVED_TOO_QUICKLY, false, true).isAllowed());
++    }
++
++    private PlayerFailMoveEvent fire(FailReason reason, boolean lagging, Boolean pluginDecision) throws Exception {
++        MinecraftServer server = mock(MinecraftServer.class);
++        server.lagging = lagging;
++        ServerLevel level = mock(ServerLevel.class);
++        when(level.getServer()).thenReturn(server);
++        ServerPlayer player = mock(ServerPlayer.class);
++        when(player.level()).thenReturn(level);
++        CraftPlayer bukkitPlayer = mock(CraftPlayer.class);
++        when(bukkitPlayer.getWorld()).thenReturn(mock(World.class));
++        ServerGamePacketListenerImpl listener = mock(ServerGamePacketListenerImpl.class, CALLS_REAL_METHODS);
++        listener.player = player;
++        doReturn(bukkitPlayer).when(listener).getCraftPlayer();
++        PluginManager plugins = mock(PluginManager.class);
++        doAnswer(call -> {
++            PlayerFailMoveEvent event = call.getArgument(0);
++            assertEquals(reason, event.getFailReason());
++            assertEquals(12.5, event.getTo().getX());
++            assertTrue(event.getLogWarning());
++            if (pluginDecision != null) {
++                event.setAllowed(pluginDecision);
++            }
++            return null;
++        }).when(plugins).callEvent(any(PlayerFailMoveEvent.class));
++        Method fire = ServerGamePacketListenerImpl.class.getDeclaredMethod("fireFailMove", FailReason.class,
++            double.class, double.class, double.class, float.class, float.class, boolean.class);
++        fire.setAccessible(true);
++        try (var bukkit = mockStatic(Bukkit.class)) {
++            bukkit.when(Bukkit::getPluginManager).thenReturn(plugins);
++            PlayerFailMoveEvent event = (PlayerFailMoveEvent) fire.invoke(listener, reason, 12.5, 64.0, 3.5, 90.0F, 0.0F, true);
++            verify(plugins).callEvent(event);
++            return event;
++        }
++    }
++}

@@ -4,8 +4,8 @@
   "meaning": "Complete path inventory of active patch trees and module-owned src files at the recorded commit; filenames and pending status are not semantic verification or a claim that every supporting file needs copying. Historical removed patches and Git/build caches are excluded.",
   "counts": {
     "patches": 150,
-    "patchesWithDecision": 39,
-    "patchesPendingReview": 111,
+    "patchesWithDecision": 41,
+    "patchesPendingReview": 109,
     "supportingSourceAndResourceFiles": 258
   },
   "patches": [
@@ -151,7 +151,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0024-Option-to-allow-weird-movement-and-disable-teleporti.patch",
-      "status": "pending-review"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0025-Optimize-Raids.patch",
@@ -487,7 +487,7 @@
     },
     {
       "source": "divinemc-server/paper-patches/features/0003-Delete-timings.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/paper-patches/features/0004-Delete-ReloadCommand.patch",
