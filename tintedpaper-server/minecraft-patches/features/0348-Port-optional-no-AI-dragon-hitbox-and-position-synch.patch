@@ -1,0 +1,115 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Sat, 14 Nov 2026 07:47:37 -0300
+Subject: [PATCH] Port optional no-AI dragon hitbox and position
+ synchronization fix
+
+
+diff --git a/net/minecraft/server/level/ServerEntity.java b/net/minecraft/server/level/ServerEntity.java
+index edad1bd673c5913e2339cfa830b6684e21b091e2..5e7f3b5a976c277f7bf06a093ca765b258b4acfe 100644
+--- a/net/minecraft/server/level/ServerEntity.java
++++ b/net/minecraft/server/level/ServerEntity.java
+@@ -179,7 +179,11 @@ public class ServerEntity {
+                 PositionPath position = this.interpolationTracker.getPositionPath(currentPosition);
+                 this.interpolationTracker.clear();
+                 MovementPacket<ClientGamePacketListener> packet;
+-                if (this.entity instanceof AbstractArrow) {
++                if (org.dreeam.leaf.config.modules.fixes.MCBugFix.mc73719 && this.entity instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon dragon && dragon.isNoAi()) {
++                    packet = null;
++                    ClientboundBundlePacket snap = this.createNoAiDragonSnap(currentPosition, yRotn, xRotn, shouldSendRotation, this.forceStateResync);
++                    if (snap != null) this.synchronizer.sendToTrackingPlayers(snap);
++                } else if (this.entity instanceof AbstractArrow) {
+                     packet = this.createMovePacket(position, yRotn, xRotn, true, true, this.forceStateResync); // Leaf - Multithreaded tracker
+                 } else {
+                     // Paper start - reduce allocation of Vec3 here
+@@ -433,6 +437,30 @@ public class ServerEntity {
+         }
+     }
+ 
++    // TintedPaper start - DivineMC MC-73719; use the captured position in both tracker paths
++    private @Nullable ClientboundBundlePacket createNoAiDragonSnap(Vec3 target, byte yRotn, byte xRotn, boolean rotationChanged, boolean force) {
++        Vec3 base = this.positionCodec.base;
++        boolean onGround = this.entity.onGround();
++        if (!force && !rotationChanged && !this.wasRiding && !this.entity.getRequiresPrecisePosition() && this.teleportDelay <= FORCED_TELEPORT_PERIOD
++            && onGround == this.wasOnGround && target.distanceToSqr(base) < TOLERANCE_LEVEL_POSITION) {
++            return null;
++        }
++        float yRot = this.entity.getYRot();
++        float xRot = this.entity.getXRot();
++        Vec3 detour = target.add(0.0, base.y > target.y ? -128.0 : 128.0, 0.0);
++        ClientboundBundlePacket packet = new ClientboundBundlePacket(List.of(
++            new ClientboundEntityPositionSyncPacket(this.entity.getId(), PositionPath.of(detour), yRot, xRot, onGround),
++            new ClientboundEntityPositionSyncPacket(this.entity.getId(), PositionPath.of(target), yRot, xRot, onGround)
++        ));
++        this.teleportDelay = 0;
++        this.positionCodec.setBase(target);
++        this.lastSentYRot = yRotn;
++        this.lastSentXRot = xRotn;
++        this.wasOnGround = onGround;
++        return packet;
++    }
++    // TintedPaper end - DivineMC MC-73719
++
+     public Vec3 getPositionBase() {
+         return this.positionCodec.getBase();
+     }
+@@ -544,7 +572,11 @@ public class ServerEntity {
+                 PositionPath position = this.interpolationTracker.getPositionPath(currentPosition);
+                 this.interpolationTracker.clear();
+                 MovementPacket<ClientGamePacketListener> packet;
+-                if (this.entity instanceof AbstractArrow) {
++                if (org.dreeam.leaf.config.modules.fixes.MCBugFix.mc73719 && this.entity instanceof net.minecraft.world.entity.boss.enderdragon.EnderDragon dragon && dragon.isNoAi()) {
++                    packet = null;
++                    ClientboundBundlePacket snap = this.createNoAiDragonSnap(currentPosition, yRotn, xRotn, shouldSendRotation, force);
++                    if (snap != null) ctx.sendToTrackingPlayers(tracker, snap);
++                } else if (this.entity instanceof AbstractArrow) {
+                     packet = this.createMovePacket(position, yRotn, xRotn, true, true, force);
+                 } else {
+                     // Paper start - reduce allocation of Vec3 here
+diff --git a/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java b/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
+index e75c6494da7c0dd96bcb6cf51a467ee511a3bf21..6b2e1e0e7bdc7781c5ee540b146600170580d5d1 100644
+--- a/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
++++ b/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java
+@@ -308,6 +308,7 @@ public class EnderDragon extends Mob implements Enemy {
+             this.setYRot(Mth.wrapDegrees(this.getYRot()));
+             if (this.isNoAi()) {
+                 this.flapTime = 0.5F;
++                if (org.dreeam.leaf.config.modules.fixes.MCBugFix.mc73719 && !this.level().isClientSide()) this.positionPartsWithoutAi(); // TintedPaper - DivineMC MC-73719
+             } else {
+                 this.flightHistory.record(this.getY(), this.getYRot());
+                 if (this.level() instanceof ServerLevel level && !hasRider) { // Purpur - Ridables
+@@ -448,6 +449,34 @@ public class EnderDragon extends Mob implements Enemy {
+         }
+     }
+ 
++    // TintedPaper start - DivineMC MC-73719
++    private void positionPartsWithoutAi() {
++        float tilt = (float)(this.flightHistory.get(5).y() - this.flightHistory.get(10).y()) * 10.0F * Mth.DEG_TO_RAD;
++        float ccTilt = Mth.cos(tilt);
++        float ssTilt = Mth.sin(tilt);
++        float rot1 = this.getYRot() * Mth.DEG_TO_RAD;
++        float ss1 = Mth.sin(rot1);
++        float cc1 = Mth.cos(rot1);
++        this.tickPart(this.body, ss1 * 0.5F, 0.0, -cc1 * 0.5F);
++        this.tickPart(this.wing1, cc1 * 4.5F, 2.0, ss1 * 4.5F);
++        this.tickPart(this.wing2, cc1 * -4.5F, 2.0, ss1 * -4.5F);
++        float ss2 = Mth.sin(this.getYRot() * Mth.DEG_TO_RAD - this.yRotA * 0.01F);
++        float cc2 = Mth.cos(this.getYRot() * Mth.DEG_TO_RAD - this.yRotA * 0.01F);
++        float yOffset = this.getHeadYOffset();
++        this.tickPart(this.head, ss2 * 6.5F * ccTilt, yOffset + ssTilt * 6.5F, -cc2 * 6.5F * ccTilt);
++        this.tickPart(this.neck, ss2 * 5.5F * ccTilt, yOffset + ssTilt * 5.5F, -cc2 * 5.5F * ccTilt);
++        DragonFlightHistory.Sample p1 = this.flightHistory.get(5);
++        for (int i = 0; i < 3; i++) {
++            EnderDragonPart tail = switch (i) { case 0 -> this.tail1; case 1 -> this.tail2; default -> this.tail3; };
++            DragonFlightHistory.Sample p0 = this.flightHistory.get(12 + i * 2);
++            float rot = this.getYRot() * Mth.DEG_TO_RAD + this.rotWrap(p0.yRot() - p1.yRot()) * Mth.DEG_TO_RAD;
++            float dd = (i + 1) * 2.0F;
++            this.tickPart(tail, -(ss1 * 1.5F + Mth.sin(rot) * dd) * ccTilt,
++                p0.y() - p1.y() - (dd + 1.5F) * ssTilt + 1.5, (cc1 * 1.5F + Mth.cos(rot) * dd) * ccTilt);
++        }
++    }
++    // TintedPaper end - DivineMC MC-73719
++
+     private void tickPart(final EnderDragonPart part, final double x, final double y, final double z) {
+         part.setPos(this.getX() + x, this.getY() + y, this.getZ() + z);
+     }
