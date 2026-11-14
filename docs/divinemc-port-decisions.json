@@ -127,9 +127,9 @@
     },
     {
       "source": "divinemc-api/paper-patches/features/0007-Pufferfish-Sentry.patch",
-      "status": "covered-by-base",
-      "reason": "The plugin/event context logging hooks are already provided by the inherited Pufferfish Sentry integration. Retain the existing version rather than duplicating the feature. The source's additional legacy enable-failure lifecycle change is separate from those logging hooks and remains under review.",
-      "evidence": ["tintedpaper-api/paper-patches/features/0010-Pufferfish-Sentry.patch"]
+      "status": "ported-missing-subset",
+      "reason": "Keep the inherited Pufferfish plugin/event logging contexts. Port only the missing legacy JavaPluginLoader enable-failure cleanup: disable the failed plugin through its manager and return before publishing PluginEnableEvent. This matches Paper's already-correct active PaperPluginInstanceManager path without changing its loading logic. The regression first reproduced a failed plugin remaining enabled, then passed with real JavaPlugin enabled-state transitions, disable callback and classloader close; successful enables still publish their event.",
+      "evidence": ["tintedpaper-api/paper-patches/features/0010-Pufferfish-Sentry.patch", "paper-api/src/main/java/org/bukkit/plugin/java/JavaPluginLoader.java", "paper-api/src/test/java/org/bukkit/plugin/java/LegacyEnableFailureTest.java", "paper-server/src/main/java/io/papermc/paper/plugin/manager/PaperPluginInstanceManager.java"]
     },
     {
       "source": "divinemc-api/paper-patches/features/0003-Delete-ReloadCommand.patch",
@@ -304,6 +304,12 @@
   "compatibilityFixes": [
     {
       "status": "fixed",
+      "attribution": "Upstream",
+      "reason": "The pinned Paper API's legacy JavaPluginLoader logs an onEnable exception but leaves JavaPlugin.isEnabled true and publishes PluginEnableEvent. Existing Sentry hooks do not cause the fault. Match Paper's active instance manager by disabling through the plugin manager and returning. Two API regressions cover failure cleanup/state/classloader close and the successful lifecycle; the complete API suite passed.",
+      "evidence": ["paper-api/src/main/java/org/bukkit/plugin/java/JavaPluginLoader.java", "paper-api/src/main/java/org/bukkit/plugin/java/JavaPlugin.java", "paper-api/src/test/java/org/bukkit/plugin/java/LegacyEnableFailureTest.java", "paper-server/src/main/java/io/papermc/paper/plugin/manager/PaperPluginInstanceManager.java"]
+    },
+    {
+      "status": "fixed",
       "attribution": "Leaf-introduced",
       "reason": "The inherited collection optimization used EnumMap for MushroomBlockTexture cap faces, but several enum constants intentionally use null. Restore the pinned Paper HashMap so initialization, nullable face lookup and legacy material APIs keep working.",
       "evidence": ["tintedpaper-api/paper-patches/features/0021-Replace-data-maps-with-optimized-collection.patch", "paper-api/src/main/java/org/bukkit/material/types/MushroomBlockTexture.java", "paper-api/src/test/java/org/bukkit/materials/MaterialDataTest.java"]
@@ -316,7 +322,7 @@
     }
   ],
   "pendingReview": [
-    "The legacy enable-failure adaptation remains under review. Bottle events and the compatible default reload-command removal are integrated.",
+    "The nine active DivineMC API feature patches now have recorded ports, retained base implementations or project-specific decisions. API build/dependency and remaining server/native/supporting-source work is not implied complete.",
     "All active Minecraft feature patches not recorded above. Preliminary title matches are not sufficient to classify a patch as covered.",
     "All remaining Paper server feature and single-file patches, Purpur patches, supporting Java sources, dependencies and native resources.",
     "Partial duplicates require review of each remaining behavior before porting. Threaded features require ownership, lifecycle and shutdown review."
