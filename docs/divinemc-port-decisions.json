@@ -134,8 +134,8 @@
     {
       "source": "divinemc-api/paper-patches/features/0003-Delete-ReloadCommand.patch",
       "support": ["divinemc-server/paper-patches/features/0004-Delete-ReloadCommand.patch"],
-      "status": "requires-compatibility-adaptation",
-      "reason": "The source deletes the public ReloadCommand class and removes Paper's lifecycle guard from CraftServer.reload. A command-level adaptation must retain API linkage and lifecycle validation; do not blindly import those deletions.",
+      "status": "ported-with-adaptations",
+      "reason": "Remove default bukkit:reload and bukkit:rl registrations from construction and clearCommands. Keep the public ReloadCommand class and its message constant for binary/source linkage, and retain CraftServer.reload lifecycle validation. The separate vanilla datapack reload can still register normally. Two API regressions cover initial/cleared maps, vanilla registration and legacy class linkage.",
       "evidence": ["paper-api/src/main/java/org/bukkit/command/defaults/ReloadCommand.java", "paper-server/src/main/java/org/bukkit/craftbukkit/CraftServer.java"]
     },
     {
@@ -253,6 +253,12 @@
       "status": "ported-with-adaptations",
       "reason": "Share event response construction between primary server-list pings and secondary login MOTD delivery. A cancelled primary ping still disconnects its status connection; a cancelled secondary event only suppresses that response. Guard an absent cached status instead of dereferencing it. Six regressions cover plugin MOTD edits, cancellation, pre/post-listener disconnects, missing status and executor rejection.",
       "evidence": ["paper-server/src/main/java/com/destroystokyo/paper/network/StandardPaperServerListPingEventImpl.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineSecondaryStatusTest.java"]
+    },
+    {
+      "source": "divinemc-server/paper-patches/features/0004-Delete-ReloadCommand.patch",
+      "status": "unnecessary-after-compatible-port",
+      "reason": "This patch only removes the lifecycle guard that refers to the source-deleted ReloadCommand class. TintedPaper preserves that public class and removes only its default command registrations, so the guard remains valid and necessary; deleting it would weaken the existing Paper API contract.",
+      "evidence": ["paper-api/src/main/java/org/bukkit/command/defaults/ReloadCommand.java", "paper-server/src/main/java/org/bukkit/craftbukkit/CraftServer.java", "paper-api/src/test/java/org/bukkit/command/ReloadRegistrationTest.java"]
     }
   ],
   "compatibilityFixes": [
@@ -270,7 +276,7 @@
     }
   ],
   "pendingReview": [
-    "Pending reload-command / legacy enable-failure adaptations need compatible native and server integrations. Bottle event API and implementations are integrated.",
+    "The legacy enable-failure adaptation remains under review. Bottle events and the compatible default reload-command removal are integrated.",
     "All active Minecraft feature patches not recorded above. Preliminary title matches are not sufficient to classify a patch as covered.",
     "All remaining Paper server feature and single-file patches, Purpur patches, supporting Java sources, dependencies and native resources.",
     "Partial duplicates require review of each remaining behavior before porting. Threaded features require ownership, lifecycle and shutdown review."

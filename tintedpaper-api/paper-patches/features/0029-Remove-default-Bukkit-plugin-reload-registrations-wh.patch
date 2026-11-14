@@ -1,0 +1,41 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: NONPLAYT <nonplay@bxteam.org>
+Date: Wed, 2 Jul 2025 19:14:14 +0300
+Subject: [PATCH] Remove default Bukkit plugin reload registrations while
+ retaining API linkage
+
+
+diff --git a/src/main/java/org/bukkit/command/SimpleCommandMap.java b/src/main/java/org/bukkit/command/SimpleCommandMap.java
+index 251ed22afeb550dbe8d85b1fd232938c47031bbf..73d6ad37971df2de3948dadd74aabe8aaee2c3b9 100644
+--- a/src/main/java/org/bukkit/command/SimpleCommandMap.java
++++ b/src/main/java/org/bukkit/command/SimpleCommandMap.java
+@@ -13,7 +13,6 @@ import org.bukkit.Location;
+ import org.bukkit.Server;
+ import org.bukkit.command.defaults.BukkitCommand;
+ import org.bukkit.command.defaults.HelpCommand;
+-import org.bukkit.command.defaults.ReloadCommand;
+ import org.bukkit.entity.Player;
+ import org.bukkit.util.StringUtil;
+ import org.jetbrains.annotations.ApiStatus;
+@@ -34,13 +33,6 @@ public class SimpleCommandMap implements CommandMap {
+     public SimpleCommandMap(@NotNull final Server server, Map<String, Command> backing) {
+         this.knownCommands = backing;
+         this.server = server;
+-        setDefaultCommands();
+-    }
+-
+-    private void setDefaultCommands() {
+-        final ReloadCommand reload = new ReloadCommand("reload");
+-        this.knownCommands.put("bukkit:reload", reload);
+-        this.knownCommands.put("bukkit:rl", reload);
+     }
+ 
+     public void setFallbackCommands() {
+@@ -188,7 +180,6 @@ public class SimpleCommandMap implements CommandMap {
+             entry.getValue().unregister(this);
+         }
+         knownCommands.clear();
+-        setDefaultCommands();
+     }
+ 
+     @Override
