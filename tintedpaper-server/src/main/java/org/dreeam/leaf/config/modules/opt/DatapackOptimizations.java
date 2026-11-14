@@ -10,6 +10,8 @@ public final class DatapackOptimizations extends ConfigModule {
     public static volatile boolean unknownTagHolderSets = true;
     public static volatile boolean selectorAliveCheckLast = true;
     public static volatile boolean selectorTagIndex = true;
+    public static volatile boolean selectorTypeIndex = true;
+    public static volatile int selectorIndexVerifySamples = 200;
     public static volatile boolean selectorPredicateLookup = true;
     public static volatile boolean scoreboardTeamNullMember = true;
     public static volatile boolean scoreboardTrackedPlayersRace = true;
@@ -39,6 +41,10 @@ public final class DatapackOptimizations extends ConfigModule {
             "Serve @e[tag=...] selectors without a distance or box from a per-level index of tagged entities instead of scanning every entity. Every candidate is still checked by the full selector.");
         selectorPredicateLookup = globalConfig.getBoolean("tintedpaper.datapacks.selector-predicate-lookup", true,
             "Reuse predicate holder lookups per selector and registry generation; entity tests and loot contexts remain live.");
+        selectorTypeIndex = globalConfig.getBoolean("tintedpaper.datapacks.selector-type-index", true,
+            "Serve @e[type=...] and @e[type=#tag] selectors without a distance or box from a per-level index by entity type instead of scanning every entity.");
+        selectorIndexVerifySamples = Math.max(0, globalConfig.getInt("tintedpaper.datapacks.selector-index-verify-samples", 200,
+            "Compare this many unlimited type-index answers with the native scan at startup; on the first difference the type index turns itself off. 0 disables the check."));
         scoreboardTeamNullMember = globalConfig.getBoolean("tintedpaper.fixes.scoreboard-team-null-member", true,
             "Omit invalid null team members when saving the scoreboard.");
         scoreboardTrackedPlayersRace = globalConfig.getBoolean("tintedpaper.fixes.scoreboard-tracked-players-race", true,

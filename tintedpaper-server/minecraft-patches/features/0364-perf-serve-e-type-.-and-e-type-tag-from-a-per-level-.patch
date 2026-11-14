@@ -1,0 +1,121 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sodium <sodium@kiyro.dev>
+Date: Sat, 14 Nov 2026 14:57:28 -0300
+Subject: [PATCH] perf: serve @e[type=...] and @e[type=#tag] from a per-level
+ type index (DatapackOptimizer)
+
+
+diff --git a/net/minecraft/commands/arguments/selector/EntitySelector.java b/net/minecraft/commands/arguments/selector/EntitySelector.java
+index a0644c40ca2f54d4883c09c746b20830194c2b55..33748ba787f553e0ab2fd9134cfbb1ac97df6c6d 100644
+--- a/net/minecraft/commands/arguments/selector/EntitySelector.java
++++ b/net/minecraft/commands/arguments/selector/EntitySelector.java
+@@ -230,6 +230,8 @@ public class EntitySelector {
+     // Leaf end - Skip inactive entity for execute
+ 
+     public @Nullable List<String> tintedPositiveTags; // TintedPaper - DatapackOptimizer: tag index
++    public net.minecraft.tags.@Nullable TagKey<net.minecraft.world.entity.EntityType<?>> tintedPositiveTypeTag; // TintedPaper - DatapackOptimizer: type index
++    public boolean tintedTypeIndexSafe = true; // TintedPaper - DatapackOptimizer: false when a loot predicate could consume random state
+ 
+     private void addEntities(final List<Entity> result, final ServerLevel level, final @Nullable AABB absoluteAABB, final Predicate<Entity> predicate) {
+         // TintedPaper start - DatapackOptimizer: serve @e[tag=...] from the level's tag index instead of scanning every entity
+@@ -239,6 +241,25 @@ public class EntitySelector {
+             return;
+         }
+         // TintedPaper end - DatapackOptimizer: serve @e[tag=...] from the level's tag index instead of scanning every entity
++        // TintedPaper start - DatapackOptimizer: serve @e[type=...] and @e[type=#tag] from the level type index
++        if (absoluteAABB == null && this.tintedTypeIndexSafe && org.dreeam.leaf.config.modules.opt.DatapackOptimizations.selectorTypeIndex
++            && (this.type instanceof EntityType<?> || this.tintedPositiveTypeTag != null) && result.size() < this.getResultLimit()) {
++            final boolean limited = this.getResultLimit() != Integer.MAX_VALUE || this.maxResults != Integer.MAX_VALUE || this.order != ORDER_ARBITRARY;
++            final List<Entity> indexed = limited && !result.isEmpty() ? null
++                : org.dreeam.leaf.util.selector.TypeIndexScan.collect(this.type, this.tintedPositiveTypeTag, level, predicate, limited);
++            if (indexed != null) {
++                if (!limited && org.dreeam.leaf.util.selector.TypeIndexScan.shouldVerify()) {
++                    final List<Entity> nativeResult = new java.util.ArrayList<>();
++                    level.getEntities(this.type, predicate, nativeResult, this.getResultLimit());
++                    org.dreeam.leaf.util.selector.TypeIndexScan.verified(indexed, nativeResult);
++                    result.addAll(nativeResult);
++                } else {
++                    result.addAll(indexed);
++                }
++                return;
++            }
++        }
++        // TintedPaper end - DatapackOptimizer: serve @e[type=...] and @e[type=#tag] from the level type index
+         int limit = this.getResultLimit();
+         if (result.size() < limit) {
+             if (absoluteAABB != null) {
+diff --git a/net/minecraft/commands/arguments/selector/EntitySelectorParser.java b/net/minecraft/commands/arguments/selector/EntitySelectorParser.java
+index 522babf6fd6c8bf38bbb2ec4a0bff9008ad9e569..9418312566c64a887fc9a6b2f99a7d33a66a44ca 100644
+--- a/net/minecraft/commands/arguments/selector/EntitySelectorParser.java
++++ b/net/minecraft/commands/arguments/selector/EntitySelectorParser.java
+@@ -92,6 +92,16 @@ public class EntitySelectorParser {
+     private final List<Predicate<Entity>> predicates = new ArrayList<>();
+     private @Nullable Predicate<Entity> tinted$aliveCheck; // TintedPaper - DPO selector predicate ordering
+     private @Nullable List<String> tintedPositiveTags; // TintedPaper - DatapackOptimizer: tag index
++    private @Nullable List<net.minecraft.tags.TagKey<net.minecraft.world.entity.EntityType<?>>> tintedPositiveTypeTags; // TintedPaper - DatapackOptimizer: type index
++
++    // TintedPaper start - DatapackOptimizer: type index
++    public void addPositiveTypeTag(final net.minecraft.tags.TagKey<net.minecraft.world.entity.EntityType<?>> tag) {
++        if (this.tintedPositiveTypeTags == null) {
++            this.tintedPositiveTypeTags = new ArrayList<>(1);
++        }
++        this.tintedPositiveTypeTags.add(tag);
++    }
++    // TintedPaper end - DatapackOptimizer: type index
+     private boolean tintedTagIndexSafe = true;
+ 
+     public void tintedDisableTagIndex() {
+@@ -186,6 +196,9 @@ public class EntitySelectorParser {
+             this.usesSelectors
+         );
+         selector.tintedPositiveTags = !this.tintedTagIndexSafe || this.tintedPositiveTags == null ? null : List.copyOf(this.tintedPositiveTags); // TintedPaper - DatapackOptimizer: tag index
++        // a single positive type tag only (two: the intersection is left to the native scan); a predicate= option disables it like the tag index
++        selector.tintedPositiveTypeTag = this.tintedTagIndexSafe && this.tintedPositiveTypeTags != null && this.tintedPositiveTypeTags.size() == 1 ? this.tintedPositiveTypeTags.get(0) : null; // TintedPaper - DatapackOptimizer: type index
++        selector.tintedTypeIndexSafe = this.tintedTagIndexSafe; // TintedPaper - DatapackOptimizer: type index
+         return selector;
+     }
+ 
+diff --git a/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java b/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
+index b530aae7ecd25d003c3b5862b43234835ea8bedc..648306435092a9a22e389914732f825c3f149a85 100644
+--- a/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
++++ b/net/minecraft/commands/arguments/selector/options/EntitySelectorOptions.java
+@@ -292,6 +292,11 @@ public class EntitySelectorOptions {
+                         }
+ 
+                         TagKey<EntityType<?>> key = TagKey.create(Registries.ENTITY_TYPE, id);
++                        // TintedPaper start - DatapackOptimizer: remember a positive type tag so the selector can use the level type index
++                        if (!inverted) {
++                            parser.addPositiveTypeTag(key);
++                        }
++                        // TintedPaper end - DatapackOptimizer: remember a positive type tag so the selector can use the level type index
+                         parser.addPredicate(e -> e.is(key) != inverted);
+                         state.markParsedTag(id);
+                     } else {
+diff --git a/net/minecraft/server/level/ServerLevel.java b/net/minecraft/server/level/ServerLevel.java
+index e55be2f5bea32547671e7e57393d914f33c5e71c..4db49b0645ccfd48e07e3b0ee6d9c5233716f41b 100644
+--- a/net/minecraft/server/level/ServerLevel.java
++++ b/net/minecraft/server/level/ServerLevel.java
+@@ -247,6 +247,7 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
+     public boolean hasRidableMoveEvent = false; // Purpur - Ridables
+     public net.minecraft.world.item.ItemStack ominousBanner; // TintedPaper - DivineMC: Optimize Raids
+     public final org.dreeam.leaf.util.selector.EntityTagIndex tagIndex = new org.dreeam.leaf.util.selector.EntityTagIndex(); // TintedPaper - DatapackOptimizer: tag index
++    public final org.dreeam.leaf.util.selector.EntityTypeIndex typeIndex = new org.dreeam.leaf.util.selector.EntityTypeIndex(); // TintedPaper - DatapackOptimizer: type index
+     public final org.dreeam.leaf.async.tracker.AsyncTracker leaf$asyncTracker = new org.dreeam.leaf.async.tracker.AsyncTracker(); // Leaf - Multithreaded tracker
+     private @Nullable WorldBorder worldBorder; // Leaf - Cache world border
+ 
+@@ -3471,6 +3472,7 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
+             org.spigotmc.AsyncCatcher.catchOp("entity register"); // Spigot
+             // TintedPaper start - DatapackOptimizer: tag index
+             entity.tintedTrackTags(ServerLevel.this.tagIndex);
++            ServerLevel.this.typeIndex.add(entity); // TintedPaper - DatapackOptimizer: type index
+             // TintedPaper end - DatapackOptimizer: tag index
+             // ServerLevel.this.getChunkSource().addEntity(entity); // Paper - ignore and warn about illegal addEntity calls instead of crashing server; moved down below valid=true
+             if (entity instanceof ServerPlayer player) {
+@@ -3524,6 +3526,7 @@ public class ServerLevel extends Level implements WorldGenLevel, ServerEntityGet
+             org.spigotmc.AsyncCatcher.catchOp("entity unregister"); // Spigot
+             // TintedPaper start - DatapackOptimizer: tag index
+             entity.tintedTrackTags(null);
++            ServerLevel.this.typeIndex.remove(entity); // TintedPaper - DatapackOptimizer: type index
+             // TintedPaper end - DatapackOptimizer: tag index
+             // Spigot start
+             if (entity instanceof Player player) {
