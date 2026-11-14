@@ -1,0 +1,158 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 13:48:30 -0300
+Subject: [PATCH] Verify fixed and End biome sample reuse preserves native data
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineEndBiomeCacheTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineEndBiomeCacheTest.java
+index db11b7197b80c914171d8503474850b580cf501d..2702f81e1013d53f478a5bf41f144a5a4fd81d68 100644
+--- a/src/test/java/org/bukkit/craftbukkit/tinted/DivineEndBiomeCacheTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineEndBiomeCacheTest.java
+@@ -93,6 +93,45 @@ class DivineEndBiomeCacheTest {
+         verify(erosion, times(2)).sampleValue(anyInt(), anyInt(), anyInt());
+     }
+ 
++    @Test
++    void chunkCenterKeysMatchUncachedSamplingAcrossSectionsAndCenterBoundary() {
++        var source = TheEndBiomeSource.create(biomes());
++        DensitySampler.Bound erosion = mock(DensitySampler.Bound.class);
++        float[] heights = {0.5F, 0.25F, -0.0625F, -0.21875F, -0.5F};
++        when(erosion.sampleValue(anyInt(), anyInt(), anyInt())).thenAnswer(call -> heights[Math.floorMod(
++            call.<Integer>getArgument(0) + call.<Integer>getArgument(1) + call.<Integer>getArgument(2), heights.length)]);
++        var sampler = sampler(erosion);
++        for (int chunkX : new int[]{-65, -64, -1, 0, 1, 64, 65, 1024}) {
++            for (int chunkZ : new int[]{-65, -1, 0, 64, 65}) {
++                BiomeResolver cached = source.createResolver(sampler);
++                BiomeResolver nativeResolver = source.createResolver(sampler);
++                for (int sectionY : new int[]{-16, -1, 0, 15, 63}) {
++                    for (int x = 0; x < 4; x++) {
++                        for (int y = 0; y < 4; y++) {
++                            for (int z = 0; z < 4; z++) {
++                                int qx = chunkX * 4 + x;
++                                int qy = sectionY * 4 + y;
++                                int qz = chunkZ * 4 + z;
++                                OptimizeBiome.endBiomeCache = false;
++                                Holder<Biome> expected = nativeResolver.getNoiseBiome(qx, qy, qz);
++                                OptimizeBiome.endBiomeCache = true;
++                                assertSame(expected, cached.getNoiseBiome(qx, qy, qz));
++                            }
++                        }
++                    }
++                }
++            }
++        }
++        clearInvocations(erosion);
++        BiomeResolver cached = source.createResolver(sampler);
++        for (int x = 0; x < 4; x++) {
++            for (int y = 0; y < 4; y++) {
++                for (int z = 0; z < 4; z++) cached.getNoiseBiome(-260 + x, -16 + y, 260 + z);
++            }
++        }
++        verify(erosion, times(4)).sampleValue(anyInt(), anyInt(), anyInt());
++    }
++
+     private static Climate.Sampler sampler(DensitySampler.Bound erosion) {
+         return new Climate.Sampler(erosion, erosion, erosion, erosion, erosion, erosion);
+     }
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/FixedBiomeFillTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/FixedBiomeFillTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..70261978dfd3d90d4e0632fcd4522d2c6c07aab3
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/FixedBiomeFillTest.java
+@@ -0,0 +1,96 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.netty.buffer.Unpooled;
++import java.util.ArrayList;
++import java.util.List;
++import net.minecraft.core.Holder;
++import net.minecraft.core.IdMapper;
++import net.minecraft.network.FriendlyByteBuf;
++import net.minecraft.world.level.biome.Biome;
++import net.minecraft.world.level.biome.BiomeResolver;
++import net.minecraft.world.level.biome.FixedBiomeSource;
++import net.minecraft.world.level.block.Block;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.chunk.LevelChunkSection;
++import net.minecraft.world.level.chunk.PalettedContainer;
++import net.minecraft.world.level.chunk.Strategy;
++import org.bukkit.support.environment.Normal;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class FixedBiomeFillTest {
++    private final Holder<Biome> first = Holder.direct(mock(Biome.class));
++    private final Holder<Biome> second = Holder.direct(mock(Biome.class));
++
++    private LevelChunkSection section() {
++        IdMapper<Holder<Biome>> ids = new IdMapper<>();
++        ids.add(this.first);
++        ids.add(this.second);
++        return new LevelChunkSection(
++            new PalettedContainer<>(Blocks.AIR.defaultBlockState(), Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY), null),
++            new PalettedContainer<>(this.first, Strategy.createForBiomes(ids), null));
++    }
++
++    private byte[] serialize(LevelChunkSection section) {
++        FriendlyByteBuf buffer = new FriendlyByteBuf(Unpooled.buffer());
++        try {
++            section.write(buffer, null, 0);
++            byte[] bytes = new byte[buffer.readableBytes()];
++            buffer.readBytes(bytes);
++            return bytes;
++        } finally {
++            buffer.release();
++        }
++    }
++
++    @Test
++    void fixedSourceMatchesNativeDataWithOneSampleAndIndependentPalettes() {
++        var fixed = spy(new FixedBiomeSource(this.second));
++        var optimized = this.section();
++        var baseline = this.section();
++        optimized.fillBiomesFromNoise(fixed, -200, -16, 600);
++        baseline.fillBiomesFromNoise((x, y, z) -> this.second, -200, -16, 600);
++        verify(fixed, times(1)).getNoiseBiome(anyInt(), anyInt(), anyInt());
++        assertArrayEquals(this.serialize(baseline), this.serialize(optimized));
++        for (int i = 0; i < 64; i++) assertSame(this.second, optimized.getNoiseBiome(i & 3, i >> 4, (i >> 2) & 3));
++
++        var another = this.section();
++        another.fillBiomesFromNoise(fixed, 0, 0, 0);
++        optimized.setNoiseBiome(0, 0, 0, this.first);
++        assertSame(this.second, another.getNoiseBiome(0, 0, 0));
++        assertSame(this.second, baseline.getNoiseBiome(0, 0, 0));
++        assertSame(Blocks.AIR.defaultBlockState(), optimized.getBlockState(0, 0, 0));
++    }
++
++    @Test
++    void customResolversAndFixedSourceSubclassesRetainEverySampleInNativeOrder() {
++        for (boolean subclass : new boolean[]{false, true}) {
++            List<String> actual = new ArrayList<>();
++            BiomeResolver resolver = (x, y, z) -> {
++                actual.add(x + "," + y + "," + z);
++                return ((x ^ y ^ z) & 1) == 0 ? this.first : this.second;
++            };
++            BiomeResolver source = subclass ? new FixedBiomeSource(this.first) {
++                @Override
++                public Holder<Biome> getNoiseBiome(int x, int y, int z) {
++                    return resolver.getNoiseBiome(x, y, z);
++                }
++            } : resolver;
++            var section = this.section();
++            section.fillBiomesFromNoise(source, -4, -8, 12);
++            List<String> expected = new ArrayList<>();
++            for (int x = 0; x < 4; x++) {
++                for (int y = 0; y < 4; y++) {
++                    for (int z = 0; z < 4; z++) {
++                        expected.add((x - 4) + "," + (y - 8) + "," + (z + 12));
++                        assertSame(((x ^ y ^ z) & 1) == 0 ? this.first : this.second, section.getNoiseBiome(x, y, z));
++                    }
++                }
++            }
++            assertEquals(expected, actual);
++        }
++    }
++}

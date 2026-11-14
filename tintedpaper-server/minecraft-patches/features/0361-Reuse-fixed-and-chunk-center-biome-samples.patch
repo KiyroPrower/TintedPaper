@@ -1,0 +1,37 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 13:48:30 -0300
+Subject: [PATCH] Reuse fixed and chunk-center biome samples
+
+Independently adapt FastNoise biome shortcuts by ZenXArch and contributors (8e88157ca6366d15f406bc9bab27ef23654f664d, MPL-2.0). Keep native mutable palettes, custom resolver order, quart Y and existing thread/sampler cache ownership. No section locks or generation scheduling changes.
+
+diff --git a/net/minecraft/world/level/biome/TheEndBiomeSource.java b/net/minecraft/world/level/biome/TheEndBiomeSource.java
+index e18ce8b812be67d62a2f3720728ed12bcda4e90d..8bf8c576051a225c8b66709b0005cc956dff05d9 100644
+--- a/net/minecraft/world/level/biome/TheEndBiomeSource.java
++++ b/net/minecraft/world/level/biome/TheEndBiomeSource.java
+@@ -69,6 +69,8 @@ public class TheEndBiomeSource extends BiomeSource {
+             if (net.minecraft.core.BlockPos.getX(key) != quartX || net.minecraft.core.BlockPos.getY(key) != quartY || net.minecraft.core.BlockPos.getZ(key) != quartZ) {
+                 return this.getNoiseBiome(quartX, quartY, quartZ, sampler);
+             }
++            // TintedPaper - FastNoise: End sampling uses chunk-center X/Z, but retains every quart Y.
++            key = net.minecraft.core.BlockPos.asLong(quartX >> 2, quartY, quartZ >> 2);
+             var entries = cache.get();
+             int capacity = Math.clamp(org.dreeam.leaf.config.modules.opt.OptimizeBiome.endBiomeCacheCapacity, 1, 65536);
+             while (entries.size() > capacity) entries.removeFirst();
+diff --git a/net/minecraft/world/level/chunk/LevelChunkSection.java b/net/minecraft/world/level/chunk/LevelChunkSection.java
+index bfdf30d94c842f77a44922b87c1f4c67d2f9668b..acc78911b7623e22a7d5e3dfba87aff34f9394b8 100644
+--- a/net/minecraft/world/level/chunk/LevelChunkSection.java
++++ b/net/minecraft/world/level/chunk/LevelChunkSection.java
+@@ -323,6 +323,12 @@ public class LevelChunkSection implements ca.spottedleaf.moonrise.patches.block_
+         final Holder<Biome> first = biomeResolver.getNoiseBiome(quartMinX, quartMinY, quartMinZ);
+         final PalettedContainer<Holder<Biome>> newBiomes = new PalettedContainer<>(first, this.biomes.strategy, null); // Paper - Anti-Xray
+ 
++        // TintedPaper - FastNoise fixed-biome shortcut; subclasses may override sampling.
++        if (biomeResolver.getClass() == net.minecraft.world.level.biome.FixedBiomeSource.class) {
++            this.biomes = newBiomes;
++            return;
++        }
++
+         for (int x = 0; x < 4; ++x) {
+             for (int y = 0; y < 4; ++y) {
+                 // Skip (0, 0, 0): the initial value already fills it, so do not sample it again.

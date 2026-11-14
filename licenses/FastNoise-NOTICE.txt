@@ -1,0 +1,8 @@
+FastNoise biome optimization ideas by ZenXArch and contributors.
+Source: https://codeberg.org/ZenXArch/FastNoise
+Revision: 8e88157ca6366d15f406bc9bab27ef23654f664d
+Original source license: Mozilla Public License 2.0 (FastNoise-MPL-2.0.txt).
+
+TintedPaper independently adapts fixed-biome single-value filling and horizontal
+End-biome invariance into its existing native palette and result-cache paths.
+It does not vendor the upstream Fabric mixins or palette-storage implementation.

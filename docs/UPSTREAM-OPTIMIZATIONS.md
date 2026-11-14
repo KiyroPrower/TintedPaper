@@ -13,7 +13,7 @@ FastNoise was requested twice and is tracked once.
 | [Explodee](https://github.com/KnownSH/Explodee) | `58b4387177d3c24b434285612b9a5042f81952ff` | Spherical ray distribution implemented inside Moonrise's loop, opt-in and default false. Two local regressions passed. |
 | [Potatoptimize](https://github.com/Tater-Certified/Potatoptimize) | `cc66d31103eba2e0e24d47a46d0bbc313e686b23` | Sign ticking/editor validation and Halloween caching already present. Christmas caching implemented with two local regressions. Slime, navigation, portals and stat policies remain pending. |
 | [Vertigo](https://github.com/Builderb0y/Vertigo) | `7a64414ab9b615f8aeea2d8ce29f2a9290f4cec8` | Negotiated client/server section protocol integration pending. |
-| [FastNoise](https://codeberg.org/ZenXArch/FastNoise) | `8e88157ca6366d15f406bc9bab27ef23654f664d` | Noise, surface and material-compiler integration pending comparison with native generation. |
+| [FastNoise](https://codeberg.org/ZenXArch/FastNoise) | `8e88157ca6366d15f406bc9bab27ef23654f664d` | Fixed-biome filling and End chunk-center result reuse adapted to native palettes/cache. Noise filling, surface and material compiler remain pending. |
 
 ## Lomka NBT stream reads
 
@@ -101,6 +101,34 @@ unchanged function checksums, native command/macro compilation, all 65,536 looku
 entries and signed-word conversion against canonical UUIDs. These checks do not
 execute the functions against a running server's scoreboard and storage. The
 original license is included inside the built-in pack.
+
+## FastNoise biome shortcuts
+
+An exact native `FixedBiomeSource` fills a section through its existing
+single-value palette after one sample instead of 64. Each section receives its
+own mutable palette. Subclasses, decorated resolvers, biome edits and custom
+resolvers keep native traversal and sampling order. Blending, retrogen, chunk
+ownership, block-state palettes and network encoding remain on their existing
+paths; no section locks are removed.
+
+The existing opt-in End biome cache now keys X/Z by chunk because the native
+sampler always uses the chunk center for those axes. It retains every quart Y,
+sampler identity, thread isolation, capacity bound and unpackable-coordinate
+fallback. A populated outer-End section needs four erosion samples instead of
+64 when this cache is enabled. This applies FastNoise's observation about
+horizontal invariance without sharing mutable palette storage or adding a
+second cache. These counts describe work verified by regressions, not measured
+TPS/MSPT gains or a full generation-parity benchmark.
+
+Tests cover byte-identical fixed-biome section serialization, independent
+palettes, overridden sources, custom resolver order, center-island boundaries,
+negative chunks and multiple Y ranges against the uncached End resolver. The
+existing sampler/thread/capacity tests remain in place. Full-world generation,
+custom generation plugins and client gameplay have not been run.
+
+These are independent native adaptations of the biome shortcuts in FastNoise's
+`FastBiomeGen` by ZenXArch and contributors. The remaining noise, surface,
+material-compiler and negotiated section-protocol work is not included.
 
 ## Other integration constraints
 
