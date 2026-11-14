@@ -26,7 +26,8 @@ are unchanged. Empty arrays allocate no scratch storage.
 
 This adapts Lomka's `MixinIntArrayTag` and `MixinLongArrayTag` by Starlev and
 contributors under LGPL-3.0-only; see `licenses/LGPL-3.0.txt`. Notices remain in
-the native source and generated patch. Moonrise's separate optimized NBT I/O
+the native source and generated patch, with the original copyright recorded in
+`licenses/Lomka-NOTICE.txt`. Moonrise's separate optimized NBT I/O
 path remains unchanged; no claim is made that every chunk read uses this path.
 Reduced stream calls are verified by tests, not a measured server TPS gain.
 
