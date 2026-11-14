@@ -6,7 +6,7 @@ FastNoise was requested twice and is tracked once.
 
 | Source | Pinned revision | State |
 | --- | --- | --- |
-| [BetterMaps](https://codeberg.org/NerjalNosk/bettermaps) | `a6e7fb7c5c31a1e54ec6ace339d4ca70c71f1488` | Deferred explorer-map integration pending. |
+| [BetterMaps](https://codeberg.org/NerjalNosk/bettermaps) | `a6e7fb7c5c31a1e54ec6ace339d4ca70c71f1488` | Opt-in deferred explorer-map integration implemented; five local regressions passed. Async/dynamic lookup and arbitrary request parameters remain pending. |
 | [Lomka](https://github.com/Starlevka/Lomka) | `5d8bf834d5d3efa783ecad0c3d2fb15a5634550f` | Bulk NBT array stream reads implemented; four local regression tests passed. Other server optimizations pending. |
 | [Worldthreader](https://github.com/2No2Name/worldthreader) | `6fbaef2f424d9a81c9d16617f58b58076c5d045c` | Existing parallel world ticking retained. Cross-world ownership and compatibility mechanisms still need comparison. |
 | [UUID-Hex](https://github.com/CJDevZ/UUID-Hex) | `e538db835f6fc56809559be6f4d4c6b8bcee20e1` | Datapack function/storage API integration pending. |
@@ -52,7 +52,37 @@ publishes a different day or timezone. Tests cover boundary milliseconds, year
 changes, rewinds and concurrent timezone probes. Halloween retains the existing
 Gale implementation. No general world-thread compatibility is implied.
 
-## Remaining integration constraints
+## BetterMaps deferred lookup
+
+`performance.maps.defer-explorer-map-search` defaults to false. Eligible loot
+and cartographer maps retain a serialized request in their custom data and appear
+as empty maps until used. The request retains the source dimension, original
+block position, native function parameters and villager context. Lookup, map
+creation and preview rendering happen on the owning world thread at use time.
+This moves the work out of unopened/unused loot and offers; it does not remove
+the possible lookup pause on the use tick or implement the upstream worker model.
+
+Native Paper treasure-map controls, structure claiming, usage stat, sound,
+`PlayerMapFilledEvent` output replacement and inventory/drop handling remain in
+their native paths. A failed lookup, wrong dimension or malformed request does
+not consume the token. Existing tokens still resolve after disabling creation.
+Other item components and unrelated custom data are retained; ordinary maps take
+the native path. Recognized tokens receive a normal 20-tick item cooldown.
+
+Client-held custom data can be forged by creative clients. Only named structure
+sets, zoom 0-4, search radius 0-50 and origins within the current border are
+accepted. Unsupported server-side functions fall back to normal creation instead
+of issuing an unusable token. Loot conditions are checked at generation and are
+not serialized or rerun on use. Broader client request parameters require
+authenticated metadata first. Original MIT notice: `licenses/BetterMaps-MIT.txt`.
+Five regressions cover native loot deferral, item-codec persistence, original
+lookup parameters/components, failed and wrong-dimension use without consumption,
+forged metadata bounds, Paper villager discovery/claim settings, and the native
+map-use path firing the fill event and honoring its replacement item. Event and
+map-storage adapters are isolated with mocks; live plugins and gameplay have not
+been tested.
+
+## Other integration constraints
 
 - BetterMaps workers call structure lookup and publish item/player changes
   directly. Adapt deferred lookup around Paper's world ownership instead of

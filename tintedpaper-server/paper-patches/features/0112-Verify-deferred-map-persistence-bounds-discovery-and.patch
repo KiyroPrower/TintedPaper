@@ -1,0 +1,223 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 13:08:09 -0300
+Subject: [PATCH] Verify deferred map persistence, bounds, discovery and Paper
+ item flow
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DeferredExplorerMapsTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DeferredExplorerMapsTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..1bedcc1b103d6a9c1b22822a5ab1e2509261d631
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DeferredExplorerMapsTest.java
+@@ -0,0 +1,210 @@
++package org.bukkit.craftbukkit.tinted;
++
++import io.papermc.paper.configuration.WorldConfiguration;
++import io.papermc.paper.configuration.type.BooleanOrDefault;
++import net.minecraft.core.BlockPos;
++import net.minecraft.core.HolderSet;
++import net.minecraft.core.component.DataComponents;
++import net.minecraft.core.registries.Registries;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.NbtOps;
++import net.minecraft.network.chat.Component;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.tags.StructureTags;
++import net.minecraft.world.InteractionHand;
++import net.minecraft.world.InteractionResult;
++import net.minecraft.world.item.ItemCooldowns;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.item.Items;
++import net.minecraft.world.item.MapItem;
++import net.minecraft.world.item.component.CustomData;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.border.WorldBorder;
++import net.minecraft.world.level.saveddata.maps.MapId;
++import net.minecraft.world.level.storage.loot.LootContext;
++import net.minecraft.world.level.storage.loot.functions.ExplorationMapFunction;
++import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
++import net.minecraft.world.phys.Vec3;
++import org.bukkit.support.RegistryHelper;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.util.maps.DeferredExplorerMaps;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DeferredExplorerMapsTest {
++    private boolean previous;
++    private static final BlockPos ORIGIN = new BlockPos(23, 70, -51);
++    private static final BlockPos TARGET = new BlockPos(1536, 64, -2048);
++
++    @BeforeEach
++    void enable() {
++        this.previous = org.dreeam.leaf.config.modules.opt.DeferredExplorerMaps.enabled;
++        org.dreeam.leaf.config.modules.opt.DeferredExplorerMaps.enabled = true;
++    }
++
++    @AfterEach
++    void restore() {
++        org.dreeam.leaf.config.modules.opt.DeferredExplorerMaps.enabled = this.previous;
++    }
++
++    private static ServerLevel level() {
++        ServerLevel level = mock(ServerLevel.class);
++        when(level.registryAccess()).thenReturn(RegistryHelper.registryAccess());
++        when(level.dimension()).thenReturn(Level.OVERWORLD);
++        WorldBorder border = mock(WorldBorder.class);
++        when(border.isWithinBounds(any(BlockPos.class))).thenReturn(true);
++        when(level.getWorldBorder()).thenReturn(border);
++        WorldConfiguration config = mock(WorldConfiguration.class);
++        config.environment = mock(WorldConfiguration.Environment.class);
++        config.environment.treasureMaps = mock(WorldConfiguration.Environment.TreasureMaps.class);
++        config.environment.treasureMaps.enabled = true;
++        config.environment.treasureMaps.findAlreadyDiscoveredVillager = true;
++        config.environment.treasureMaps.findAlreadyDiscoveredLootTable = BooleanOrDefault.USE_DEFAULT;
++        when(level.paperConfig()).thenReturn(config);
++        return level;
++    }
++
++    private static ExplorationMapFunction function(int radius) {
++        var destinations = RegistryHelper.registryAccess().lookupOrThrow(Registries.STRUCTURE).getOrThrow(StructureTags.ON_WOODLAND_MANSION_MAPS);
++        return (ExplorationMapFunction) ExplorationMapFunction.makeExplorationMap(destinations).setZoom((byte) 3)
++            .setSearchRadius(radius).setSkipKnownStructures(false).build();
++    }
++
++    private static LootContext context(ServerLevel level) {
++        LootContext context = mock(LootContext.class);
++        when(context.getLevel()).thenReturn(level);
++        when(context.getOptional(LootContextParams.ORIGIN)).thenReturn(Vec3.atCenterOf(ORIGIN));
++        return context;
++    }
++
++    @Test
++    void nativeLootDefersWithoutLookupAndThePersistedTokenResolvesWithOriginalParameters() throws Exception {
++        ServerLevel level = level();
++        ItemStack original = new ItemStack(Items.FILLED_MAP, 3);
++        original.set(DataComponents.CUSTOM_NAME, Component.literal("Explorer's map"));
++        CompoundTag custom = new CompoundTag();
++        custom.putString("plugin-data", "retained");
++        original.set(DataComponents.CUSTOM_DATA, CustomData.of(custom));
++        ItemStack token = function(12).run(original, context(level));
++        assertTrue(token.is(Items.MAP));
++        assertEquals(3, token.getCount());
++        assertEquals(original.get(DataComponents.CUSTOM_NAME), token.get(DataComponents.CUSTOM_NAME));
++        assertFalse(token.has(DataComponents.MAP_ID));
++        verify(level, never()).findNearestMapStructure(any(HolderSet.class), any(BlockPos.class), anyInt(), anyBoolean());
++        var ops = level.registryAccess().createSerializationContext(NbtOps.INSTANCE);
++        token = ItemStack.CODEC.parse(ops, ItemStack.CODEC.encodeStart(ops, token).getOrThrow()).getOrThrow();
++        org.dreeam.leaf.config.modules.opt.DeferredExplorerMaps.enabled = false;
++        when(level.findNearestMapStructure(any(HolderSet.class), eq(ORIGIN), eq(12), eq(false))).thenReturn(TARGET);
++        try (var mapMethods = mockStatic(MapItem.class)) {
++            mapMethods.when(() -> MapItem.applyNewSavedData(eq(level), any(ItemStack.class), eq(TARGET.getX()), eq(TARGET.getZ()), eq((byte) 3), eq(true), eq(true)))
++                .thenAnswer(call -> { call.getArgument(1, ItemStack.class).set(DataComponents.MAP_ID, new MapId(7)); return null; });
++            ItemStack map = DeferredExplorerMaps.resolve(level, token);
++            assertNotNull(map);
++            assertTrue(map.is(Items.FILLED_MAP));
++            assertEquals(1, map.getCount());
++            assertEquals(new MapId(7), map.get(DataComponents.MAP_ID));
++            assertEquals("retained", map.get(DataComponents.CUSTOM_DATA).copyTag().getStringOr("plugin-data", ""));
++            assertFalse(map.get(DataComponents.CUSTOM_DATA).contains(DeferredExplorerMaps.KEY));
++            assertEquals(3, token.getCount());
++            assertTrue(token.get(DataComponents.CUSTOM_DATA).contains(DeferredExplorerMaps.KEY));
++            mapMethods.verify(() -> MapItem.renderBiomePreviewMap(eq(level), same(map)));
++        }
++        verify(level).findNearestMapStructure(any(HolderSet.class), eq(ORIGIN), eq(12), eq(false));
++    }
++
++    @Test
++    void failedOrWrongDimensionRequestsAreNotConsumedByNativeMapUse() {
++        ServerLevel level = level();
++        ItemStack token = function(12).run(new ItemStack(Items.FILLED_MAP, 3), context(level));
++        when(level.dimension()).thenReturn(Level.NETHER);
++        ServerPlayer player = mock(ServerPlayer.class);
++        when(player.getItemInHand(InteractionHand.MAIN_HAND)).thenReturn(token);
++        ItemCooldowns cooldowns = mock(ItemCooldowns.class);
++        when(player.getCooldowns()).thenReturn(cooldowns);
++        assertSame(InteractionResult.FAIL, Items.MAP.use(level, player, InteractionHand.MAIN_HAND));
++        assertEquals(3, token.getCount());
++        verify(cooldowns).addCooldown(token, 20);
++        verify(level, never()).findNearestMapStructure(any(HolderSet.class), any(BlockPos.class), anyInt(), anyBoolean());
++        when(level.dimension()).thenReturn(Level.OVERWORLD);
++        assertSame(InteractionResult.FAIL, Items.MAP.use(level, player, InteractionHand.MAIN_HAND));
++        assertEquals(3, token.getCount());
++    }
++
++    @Test
++    void malformedClientMetadataAndOversizedSearchesNeverReachLookup() {
++        ServerLevel level = level();
++        ItemStack token = function(12).run(new ItemStack(Items.FILLED_MAP), context(level));
++        CustomData.update(DataComponents.CUSTOM_DATA, token, data -> data.getCompound(DeferredExplorerMaps.KEY).orElseThrow()
++            .getCompound("function").orElseThrow().putInt("search_radius", Integer.MAX_VALUE));
++        assertTrue(DeferredExplorerMaps.resolve(level, token).isEmpty());
++        CustomData.update(DataComponents.CUSTOM_DATA, token, data -> data.getCompound(DeferredExplorerMaps.KEY).orElseThrow().putIntArray("origin", new int[]{1, 2}));
++        assertTrue(DeferredExplorerMaps.resolve(level, token).isEmpty());
++        verify(level, never()).findNearestMapStructure(any(HolderSet.class), any(BlockPos.class), anyInt(), anyBoolean());
++        assertFalse(function(51).tintedCanDefer());
++        assertFalse(((ExplorationMapFunction) ExplorationMapFunction.makeExplorationMap(HolderSet.direct()).build()).tintedCanDefer());
++        assertNull(DeferredExplorerMaps.resolve(level, new ItemStack(Items.MAP)));
++    }
++
++    @Test
++    void cartographerContextKeepsPaperDiscoveryAndClaimPolicy() {
++        ServerLevel level = level();
++        level.paperConfig().environment.treasureMaps.findAlreadyDiscoveredVillager = false;
++        LootContext context = context(level);
++        when(context.hasParameter(LootContextParams.ADDITIONAL_COST_COMPONENT_ALLOWED)).thenReturn(true);
++        when(context.getOptional(LootContextParams.THIS_ENTITY)).thenReturn(mock(net.minecraft.world.entity.npc.villager.AbstractVillager.class));
++        ItemStack token = function(12).run(new ItemStack(Items.FILLED_MAP), context);
++        assertTrue(token.is(Items.MAP));
++        var structures = mock(net.minecraft.world.level.StructureManager.class);
++        when(level.structureManager()).thenReturn(structures);
++        when(structures.getStructureAt(eq(ORIGIN), any(HolderSet.class))).thenReturn(net.minecraft.world.level.levelgen.structure.StructureStart.INVALID_START);
++        verify(level, never()).findNearestMapStructure(any(HolderSet.class), any(BlockPos.class), anyInt(), anyBoolean());
++        assertTrue(DeferredExplorerMaps.resolve(level, token).isEmpty());
++        verify(structures).getStructureAt(eq(ORIGIN), any(HolderSet.class));
++        verify(level).findNearestMapStructure(any(HolderSet.class), eq(ORIGIN), eq(12), eq(true));
++        clearInvocations(level);
++        level.paperConfig().environment.treasureMaps.enabled = false;
++        assertTrue(DeferredExplorerMaps.resolve(level, token).isEmpty());
++        verify(level, never()).findNearestMapStructure(any(HolderSet.class), any(BlockPos.class), anyInt(), anyBoolean());
++    }
++
++    @Test
++    void nativeMapUseConsumesOnceFiresPaperEventAndHonorsItsReplacement() {
++        ServerLevel level = level();
++        ItemStack token = function(12).run(new ItemStack(Items.FILLED_MAP, 3), context(level));
++        when(level.findNearestMapStructure(any(HolderSet.class), eq(ORIGIN), eq(12), eq(false))).thenReturn(TARGET);
++        ServerPlayer player = mock(ServerPlayer.class);
++        when(player.getItemInHand(InteractionHand.MAIN_HAND)).thenReturn(token);
++        when(player.getCooldowns()).thenReturn(mock(ItemCooldowns.class));
++        when(player.getInventory()).thenReturn(mock(net.minecraft.world.entity.player.Inventory.class));
++        when(player.getBukkitEntity()).thenReturn(mock(org.bukkit.craftbukkit.entity.CraftPlayer.class));
++        ItemStack pluginReplacement = new ItemStack(Items.DIAMOND);
++        org.bukkit.inventory.ItemStack input = mock(org.bukkit.inventory.ItemStack.class);
++        org.bukkit.inventory.ItemStack output = mock(org.bukkit.inventory.ItemStack.class);
++        try (var mapMethods = mockStatic(MapItem.class);
++             var craft = mockStatic(org.bukkit.craftbukkit.inventory.CraftItemStack.class);
++             var events = mockConstruction(io.papermc.paper.event.player.PlayerMapFilledEvent.class, (event, construction) -> {
++                 assertSame(input, construction.arguments().get(1));
++                 assertSame(output, construction.arguments().get(2));
++                 when(event.getCreatedMap()).thenReturn(output);
++             })) {
++            mapMethods.when(() -> MapItem.applyNewSavedData(eq(level), any(ItemStack.class), eq(TARGET.getX()), eq(TARGET.getZ()), eq((byte) 3), eq(true), eq(true)))
++                .thenAnswer(call -> { call.getArgument(1, ItemStack.class).set(DataComponents.MAP_ID, new MapId(7)); return null; });
++            craft.when(() -> org.bukkit.craftbukkit.inventory.CraftItemStack.asBukkitCopy(same(token))).thenReturn(input);
++            craft.when(() -> org.bukkit.craftbukkit.inventory.CraftItemStack.asBukkitMirror(any(ItemStack.class))).thenReturn(output);
++            craft.when(() -> org.bukkit.craftbukkit.inventory.CraftItemStack.unwrap(output)).thenReturn(pluginReplacement);
++            assertSame(InteractionResult.SUCCESS, Items.MAP.use(level, player, InteractionHand.MAIN_HAND));
++            assertEquals(2, token.getCount());
++            assertEquals(1, events.constructed().size());
++            verify(events.constructed().getFirst()).callEvent();
++            verify(player).awardStat(net.minecraft.stats.Stats.ITEM_USED.get(Items.MAP));
++            verify(player).drop(same(pluginReplacement), eq(false), eq(net.minecraft.util.Prediction.SERVER_ONLY));
++            mapMethods.verify(() -> MapItem.create(any(ServerLevel.class), anyInt(), anyInt(), anyByte(), anyBoolean(), anyBoolean()), never());
++        }
++    }
++}
