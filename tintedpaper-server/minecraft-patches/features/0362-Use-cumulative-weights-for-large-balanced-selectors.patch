@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 13:53:24 -0300
+Subject: [PATCH] Use cumulative weights for large balanced selectors
+
+Adapt Lomka MixinCompact by Starlev and contributors, Copyright 2026, LGPL-3.0-only, revision 5d8bf834d5d3efa783ecad0c3d2fb15a5634550f. Keep linear selection for small or front-heavy lists and invalid draws; preserve one native bounded RNG call, ordering, zero weights, validation and codecs.
+
+diff --git a/net/minecraft/util/random/WeightedList.java b/net/minecraft/util/random/WeightedList.java
+index 99ed1908e6396f73ce2c80e48cd7ac454de29e04..b57572b258bad4e13e091de9e1a395c0f5f8ec6e 100644
+--- a/net/minecraft/util/random/WeightedList.java
++++ b/net/minecraft/util/random/WeightedList.java
+@@ -173,13 +173,46 @@ public class WeightedList<E> { // Paper - non-final
+ 
+     private static class Compact<E> implements WeightedList.Selector<E> {
+         private final Weighted<?>[] entries;
++        private final int @Nullable [] cumulativeWeights;
+ 
+         private Compact(final List<Weighted<E>> entries) {
+             this.entries = entries.toArray(Weighted[]::new);
++            // TintedPaper - Lomka, Copyright 2026 Starlev and contributors, LGPL-3.0-only.
++            // Small or front-heavy lists are cheaper to scan and need no extra storage.
++            int[] cumulative = null;
++            if (this.entries.length >= 64) {
++                long total = 0;
++                long scanWork = 0;
++                for (int i = 0; i < this.entries.length; i++) {
++                    int weight = this.entries[i].weight();
++                    total += weight;
++                    scanWork += (long) weight * (i + 1L);
++                }
++                if (total > 0 && total <= Integer.MAX_VALUE && scanWork >= total * 32) {
++                    cumulative = new int[this.entries.length];
++                    int running = 0;
++                    for (int i = 0; i < this.entries.length; i++) {
++                        running += this.entries[i].weight();
++                        cumulative[i] = running;
++                    }
++                }
++            }
++            this.cumulativeWeights = cumulative;
+         }
+ 
+         @Override
+         public E get(int selection) {
++            int[] cumulative = this.cumulativeWeights;
++            if (cumulative != null && selection >= 0 && selection < cumulative[cumulative.length - 1]) {
++                int low = 0;
++                int high = cumulative.length;
++                while (low < high) {
++                    int middle = (low + high) >>> 1;
++                    if (selection < cumulative[middle]) high = middle;
++                    else low = middle + 1;
++                }
++                return (E)this.entries[low].value();
++            }
+             for (Weighted<?> entry : this.entries) {
+                 selection -= entry.weight();
+                 if (selection < 0) {
