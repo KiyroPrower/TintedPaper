@@ -1,0 +1,92 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 07:37:01 -0300
+Subject: [PATCH] Verify failed legacy enables close the loader without
+ publishing enable
+
+
+diff --git a/src/test/java/org/bukkit/plugin/java/LegacyEnableFailureTest.java b/src/test/java/org/bukkit/plugin/java/LegacyEnableFailureTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..2e1535f48c4555d63c5e09fe13fba261f48ed8dc
+--- /dev/null
++++ b/src/test/java/org/bukkit/plugin/java/LegacyEnableFailureTest.java
+@@ -0,0 +1,79 @@
++package org.bukkit.plugin.java;
++
++import java.util.List;
++import java.util.logging.Level;
++import java.util.logging.Logger;
++import org.bukkit.Bukkit;
++import org.bukkit.Server;
++import org.bukkit.event.server.PluginDisableEvent;
++import org.bukkit.event.server.PluginEnableEvent;
++import org.bukkit.plugin.PluginDescriptionFile;
++import org.bukkit.plugin.PluginManager;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.Test;
++import org.mockito.MockedStatic;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.ArgumentMatchers.*;
++import static org.mockito.Mockito.*;
++
++@SuppressWarnings("removal")
++class LegacyEnableFailureTest {
++    private JavaPluginLoader loader;
++    private JavaPlugin plugin;
++    private PluginManager plugins;
++    private PluginClassLoader classLoader;
++    private Logger logger;
++    private MockedStatic<Bukkit> bukkit;
++
++    @BeforeEach
++    void setup() {
++        this.bukkit = mockStatic(Bukkit.class);
++        this.bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
++        this.logger = mock(Logger.class);
++        Server server = mock(Server.class);
++        this.plugins = mock(PluginManager.class);
++        when(server.getLogger()).thenReturn(this.logger);
++        when(server.getPluginManager()).thenReturn(this.plugins);
++        this.loader = new JavaPluginLoader(server);
++        this.classLoader = mock(PluginClassLoader.class);
++        when(this.classLoader.getClasses()).thenReturn(List.of());
++        this.plugin = mock(JavaPlugin.class, CALLS_REAL_METHODS);
++        var description = new PluginDescriptionFile("LegacyTest", "1.0", "test.Main");
++        doReturn(description).when(this.plugin).getDescription();
++        doReturn(description).when(this.plugin).getPluginMeta();
++        doReturn(this.logger).when(this.plugin).getLogger();
++        doReturn(this.classLoader).when(this.plugin).getClassLoader();
++        doAnswer(call -> { this.loader.disablePlugin(call.getArgument(0)); return null; })
++            .when(this.plugins).disablePlugin(this.plugin);
++    }
++
++    @AfterEach
++    void closeBukkit() {
++        if (this.bukkit != null) this.bukkit.close();
++    }
++
++    @Test
++    void failingEnableDisablesThePluginAndDoesNotPublishAnEnableEvent() throws Exception {
++        var failure = new IllegalStateException("failed onEnable");
++        doThrow(failure).when(this.plugin).onEnable();
++        this.loader.enablePlugin(this.plugin);
++        assertFalse(this.plugin.isEnabled());
++        verify(this.plugins).disablePlugin(this.plugin);
++        verify(this.plugin).onDisable();
++        verify(this.classLoader).close();
++        verify(this.plugins).callEvent(isA(PluginDisableEvent.class));
++        verify(this.plugins, never()).callEvent(isA(PluginEnableEvent.class));
++        verify(this.logger).log(eq(Level.SEVERE), contains("Error occurred while enabling"), same(failure));
++    }
++
++    @Test
++    void successfulEnableRetainsItsLifecycleEvent() {
++        this.loader.enablePlugin(this.plugin);
++        assertTrue(this.plugin.isEnabled());
++        verify(this.plugins).callEvent(isA(PluginEnableEvent.class));
++        verify(this.plugins, never()).disablePlugin(any());
++        verify(this.plugin, never()).onDisable();
++    }
++}

@@ -39,7 +39,7 @@
     },
     {
       "source": "divinemc-api/paper-patches/features/0007-Pufferfish-Sentry.patch",
-      "status": "covered-by-base"
+      "status": "ported-missing-subset"
     },
     {
       "source": "divinemc-api/paper-patches/features/0008-Paper-PR-Player-standing-on-position-API.patch",
