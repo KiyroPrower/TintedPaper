@@ -1,0 +1,189 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 13 Nov 2026 23:35:59 -0300
+Subject: [PATCH] Verify lazy aquifer factory calls and bounded NBT writes
+ under background starvation
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineAquiferParityTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineAquiferParityTest.java
+index 5724806b39c2899dcf448567ac8fe7b6c59ad856..2d1bf67de763e9375cf28605308cbea5b1ef70d6 100644
+--- a/src/test/java/org/bukkit/craftbukkit/tinted/DivineAquiferParityTest.java
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineAquiferParityTest.java
+@@ -91,6 +91,32 @@ class DivineAquiferParityTest {
+         assertTrue(tie);
+     }
+ 
++    @Test
++    void customFactoriesRemainLazyAndKeepPaperSamplingOrder() {
++        var visited = new java.util.ArrayList<net.minecraft.core.BlockPos>();
++        var factory = new LegacyRandomSource.LegacyPositionalRandomFactory(42) {
++            @Override
++            public net.minecraft.util.RandomSource at(int x, int y, int z) {
++                visited.add(new net.minecraft.core.BlockPos(x, y, z));
++                return super.at(x, y, z);
++            }
++        };
++        var aquifer = create(factory, new DensityVolume(16, 384, 16, 0, -64, 0));
++        assertTrue(visited.isEmpty());
++        aquifer.computeSubstance(0, 0, 0, 1.0);
++        assertTrue(visited.isEmpty());
++        aquifer.computeSubstance(0, 0, 0, -1.0);
++        var expected = new java.util.ArrayList<net.minecraft.core.BlockPos>();
++        for (int x = -1; x <= 0; x++) {
++            for (int y = -1; y <= 1; y++) {
++                for (int z = -1; z <= 0; z++) expected.add(new net.minecraft.core.BlockPos(x, y, z));
++            }
++        }
++        assertEquals(expected, visited);
++        aquifer.computeSubstance(0, 0, 0, -1.0);
++        assertEquals(expected, visited);
++    }
++
+     @Test
+     void reusedRandomMatchesNativeSeedsIncludingZeroAndCustomFactories() {
+         var factories = java.util.List.of(
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineNbtWriteCacheTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineNbtWriteCacheTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..922ca23d3a23e48be32292fdef5388b57b93c922
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineNbtWriteCacheTest.java
+@@ -0,0 +1,139 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.io.IOException;
++import java.util.LinkedHashMap;
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.function.Consumer;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.util.thread.PriorityConsecutiveExecutor;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.chunk.storage.IOWorker;
++import net.minecraft.world.level.chunk.storage.RegionFileStorage;
++import org.bukkit.support.environment.Normal;
++import org.dreeam.leaf.config.modules.opt.NbtWriteCache;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.ArgumentMatchers.*;
++import static org.mockito.Mockito.*;
++
++@Normal
++class DivineNbtWriteCacheTest {
++    private int previousSoft;
++    private int previousHard;
++    private IOWorker worker;
++    private RegionFileStorage storage;
++
++    @BeforeEach
++    void setup() throws Exception {
++        this.previousSoft = NbtWriteCache.softLimit;
++        this.previousHard = NbtWriteCache.hardLimit;
++        NbtWriteCache.softLimit = 2;
++        NbtWriteCache.hardLimit = 4;
++        this.worker = mock(IOWorker.class, CALLS_REAL_METHODS);
++        this.storage = mock(RegionFileStorage.class);
++        var executor = mock(PriorityConsecutiveExecutor.class);
++        // Execute foreground submissions, but hold background draining to reproduce a busy writer queue.
++        when(executor.scheduleWithResult(anyInt(), any())).thenAnswer(call -> {
++            var future = new CompletableFuture<Object>();
++            call.<Consumer<CompletableFuture<Object>>>getArgument(1).accept(future);
++            return future;
++        });
++        field("pendingWrites", new LinkedHashMap<>());
++        field("shutdownRequested", new AtomicBoolean());
++        field("storage", this.storage);
++        field("consecutiveExecutor", executor);
++    }
++
++    @AfterEach
++    void restore() {
++        NbtWriteCache.softLimit = this.previousSoft;
++        NbtWriteCache.hardLimit = this.previousHard;
++    }
++
++    @Test
++    void foregroundLimitPreservesLatestDataDeletesOrderingAndEveryFuture() throws Exception {
++        var p0 = new ChunkPos(0, 0);
++        var p1 = new ChunkPos(1, 0);
++        var p2 = new ChunkPos(2, 0);
++        var p3 = new ChunkPos(3, 0);
++        var old = new CompoundTag();
++        old.putInt("version", 1);
++        var latest = new CompoundTag();
++        latest.putInt("version", 2);
++        var first = this.worker.store(p0, old);
++        var replacement = this.worker.store(p0, latest);
++        var deletion = this.worker.store(p1, (CompoundTag) null);
++        var third = this.worker.store(p2, old);
++        assertFalse(first.isDone());
++        var fourth = this.worker.store(p3, latest);
++        CompletableFuture.allOf(first, replacement, deletion, third).join();
++        assertFalse(fourth.isDone());
++        var order = inOrder(this.storage);
++        order.verify(this.storage).write(p0, latest);
++        order.verify(this.storage).write(p1, null);
++        order.verify(this.storage).write(p2, old);
++        order.verifyNoMoreInteractions();
++        assertEquals(latest, this.worker.loadAsync(p3).join().orElseThrow());
++        drain();
++        fourth.join();
++        verify(this.storage).write(p3, latest);
++    }
++
++    @Test
++    void failedWriteCompletesExceptionallyWithoutDiscardingOtherWrites() throws Exception {
++        var failing = new ChunkPos(0, 0);
++        doThrow(new IOException("test write failure")).when(this.storage).write(eq(failing), any());
++        var first = this.worker.store(failing, new CompoundTag());
++        var second = this.worker.store(new ChunkPos(1, 0), new CompoundTag());
++        var third = this.worker.store(new ChunkPos(2, 0), new CompoundTag());
++        var fourth = this.worker.store(new ChunkPos(3, 0), new CompoundTag());
++        assertTrue(first.isCompletedExceptionally());
++        second.join();
++        third.join();
++        drain();
++        fourth.join();
++        verify(this.storage, times(4)).write(any(), any());
++    }
++
++    @Test
++    void softLimitAddsOneBackgroundWriteWithoutDrainingTheWholeQueue() throws Exception {
++        NbtWriteCache.softLimit = 1;
++        NbtWriteCache.hardLimit = 100;
++        var writes = new java.util.ArrayList<CompletableFuture<Void>>();
++        for (int i = 0; i < 20; i++) writes.add(this.worker.store(new ChunkPos(i, 0), new CompoundTag()));
++        drain();
++        assertTrue(writes.get(0).isDone());
++        assertTrue(writes.get(1).isDone());
++        assertFalse(writes.get(2).isDone());
++        verify(this.storage, times(2)).write(any(), any());
++        for (int i = 0; i < 20; i++) drain();
++        CompletableFuture.allOf(writes.toArray(CompletableFuture[]::new)).join();
++        verify(this.storage, times(20)).write(any(), any());
++    }
++
++    @Test
++    void zeroAndNegativeLimitsTerminateAndPersistTheWrite() throws Exception {
++        NbtWriteCache.softLimit = 0;
++        NbtWriteCache.hardLimit = -1;
++        var data = new CompoundTag();
++        var pos = new ChunkPos(-1, -1);
++        this.worker.store(pos, data).get(5, java.util.concurrent.TimeUnit.SECONDS);
++        verify(this.storage).write(pos, data);
++    }
++
++    private void field(String name, Object value) throws Exception {
++        var field = IOWorker.class.getDeclaredField(name);
++        field.setAccessible(true);
++        field.set(this.worker, value);
++    }
++
++    private void drain() throws Exception {
++        var drain = IOWorker.class.getDeclaredMethod("storePendingChunk");
++        drain.setAccessible(true);
++        drain.invoke(this.worker);
++    }
++}

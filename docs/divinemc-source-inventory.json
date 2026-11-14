@@ -4,8 +4,8 @@
   "meaning": "Complete path inventory of active patch trees and module-owned src files at the recorded commit; filenames and pending status are not semantic verification or a claim that every supporting file needs copying. Historical removed patches and Git/build caches are excluded.",
   "counts": {
     "patches": 150,
-    "patchesWithDecision": 25,
-    "patchesPendingReview": 125,
+    "patchesWithDecision": 33,
+    "patchesPendingReview": 117,
     "supportingSourceAndResourceFiles": 258
   },
   "patches": [
@@ -115,11 +115,11 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0015-Carpet-Fixes-Optimized-getBiome-method.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0016-Carpet-Fixes-Sheep-Optimization.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0017-ModernFix-compact_bit_storage.patch",
@@ -227,7 +227,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0043-MSPT-Tracking-for-each-world.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0044-Catch-update-suppressors.patch",
@@ -239,11 +239,11 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0046-C2ME-Limit-NBT-cache.patch",
-      "status": "pending-review"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0047-C2ME-Optimize-Aquifer-and-Beardifier.patch",
-      "status": "pending-review"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0048-Copper-Bulb-1gt-delay.patch",
@@ -307,15 +307,15 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0063-Pufferfish-Make-EntityCollisionContext-a-live-repres.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0064-Pufferfish-Optimize-random-calls-in-chunk-ticking.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0065-Pufferfish-Reduce-projectile-chunk-loading.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0066-C2ME-native-math-optimization.patch",
