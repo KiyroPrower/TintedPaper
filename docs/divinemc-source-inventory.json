@@ -4,8 +4,8 @@
   "meaning": "Complete path inventory of active patch trees and module-owned src files at the recorded commit; filenames and pending status are not semantic verification or a claim that every supporting file needs copying. Historical removed patches and Git/build caches are excluded.",
   "counts": {
     "patches": 150,
-    "patchesWithDecision": 45,
-    "patchesPendingReview": 105,
+    "patchesWithDecision": 49,
+    "patchesPendingReview": 101,
     "supportingSourceAndResourceFiles": 258
   },
   "patches": [
@@ -135,11 +135,11 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0020-Snowball-and-Egg-knockback.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0021-Optimize-suffocation.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0022-Reduce-chunk-loading-lookups.patch",
@@ -291,7 +291,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0059-lithium-combined_heightmap_update.patch",
-      "status": "pending-review"
+      "status": "covered-by-base"
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0060-lithium-sleeping_block_entity.patch",
@@ -331,7 +331,7 @@
     },
     {
       "source": "divinemc-server/minecraft-patches/features/0069-Fix-MC-73719.patch",
-      "status": "pending-review"
+      "status": "ported-with-adaptations"
     },
     {
       "source": "divinemc-server/minecraft-patches/sources/alternate/current/wire/UpdateOrder.java.patch",

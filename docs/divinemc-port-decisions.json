@@ -299,6 +299,32 @@
       "config": ["performance.chunks.player-near-chunk-detection-range"],
       "evidence": ["tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/opt/SpawnTrackingRange.java", "tintedpaper-server/src/minecraft/java/ca/spottedleaf/moonrise/common/misc/NearbyPlayers.java", "tintedpaper-server/src/minecraft/java/net/minecraft/server/level/ChunkMap.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineSpawnTrackingTest.java"],
       "validation": "AllFeatures suite passed, including four regressions for live configuration/clamping and default values, tracking-square coverage for every integer radius 0-1024, actual circular queries with strict boundaries/spectators/stale backing slots, and Paper event bounds/cancellation/plugin-expanded default radii. No gameplay, live reload under parallel-world load or benchmark validation."
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0069-Fix-MC-73719.patch",
+      "status": "ported-with-adaptations",
+      "reason": "Port the opt-in no-AI dragon multipart-position update and bundled detour/final position sync. Integrate both the normal tracker and Leaf's separate parallel-tracker path, using its captured position for both packets. Preserve forced resync, precise-position requests, dismount and on-ground changes; keep raw rotation and ground flags. Reuse the existing tracker send/metadata lifecycle and avoid the source's temporary tail array. The option remains false by default; correcting this packet path does not establish general parallel-tracker safety or prove the client visual workaround.",
+      "config": ["fixes.vanilla-bug-fix.mc-73719"],
+      "evidence": ["tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/fixes/MCBugFix.java", "tintedpaper-server/src/minecraft/java/net/minecraft/server/level/ServerEntity.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/entity/boss/enderdragon/EnderDragon.java", "paper-server/src/test/java/org/bukkit/craftbukkit/tinted/DivineNoAiDragonTest.java"],
+      "validation": "AllFeatures suite passed, including five regressions for ascending/descending detours and base updates, captured parallel-tracker positions, resync/ground/precise/dismount handling, disabled/AI-enabled paths, and all multipart offsets after translation/rotation. Client visuals, actual gameplay AI toggles and live parallel-world stress remain unvalidated."
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0020-Snowball-and-Egg-knockback.patch",
+      "status": "covered-by-base",
+      "reason": "Retain the inherited Polpot snowball/egg knockback version and its existing gameplay switches. It applies knockback and explicitly marks velocity dirty without the source's extra epsilon-damage call. Preserve that existing damage/event policy and global configuration instead of replacing it with DivineMC's per-world variant; this records an existing version, not identical damage-event streams.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0104-Polpot-Make-egg-and-snowball-can-knockback-player.patch", "tintedpaper-server/src/main/java/org/dreeam/leaf/config/modules/gameplay/Knockback.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/entity/projectile/throwableitemprojectile/Snowball.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/entity/projectile/throwableitemprojectile/ThrownEgg.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0021-Optimize-suffocation.patch",
+      "status": "covered-by-base",
+      "reason": "Retain the inherited Gale/Pufferfish interval and damage-cooldown gating of isInWall. The existing per-world interval defaults to ten ticks and can disable interval reduction; do not register DivineMC's competing global toggle. Its explicit Wither exception and public helper differ from the retained base variant, so no assertion of identical damage cadence for every entity is made.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0018-Reduce-in-wall-checks.patch", "tintedpaper-server/src/main/java/org/galemc/gale/configuration/GaleWorldConfiguration.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/entity/LivingEntity.java"]
+    },
+    {
+      "source": "divinemc-server/minecraft-patches/features/0059-lithium-combined_heightmap_update.patch",
+      "status": "covered-by-base",
+      "reason": "The inherited Lithium patch already routes the same four LevelChunk heightmaps through the combined updater and exposes Heightmap.isOpaque. The supporting CombinedHeightmapUpdate Java file is byte-identical to the DivineMC reference (SHA-256 ee65e3d0c54625c4704a2c2b510167c40ca49d5e90bcf43d764cd279580e0773). Keep the existing integration and licenses instead of copying it again.",
+      "evidence": ["tintedpaper-server/minecraft-patches/features/0233-Lithium-combined-heightmap-update.patch", "tintedpaper-server/src/main/java/net/caffeinemc/mods/lithium/common/world/chunk/heightmap/CombinedHeightmapUpdate.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/chunk/LevelChunk.java", "tintedpaper-server/src/minecraft/java/net/minecraft/world/level/levelgen/Heightmap.java"]
     }
   ],
   "compatibilityFixes": [

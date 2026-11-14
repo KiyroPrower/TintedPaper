@@ -18,9 +18,12 @@ public class MCBugFix extends ConfigModule {
     public static int mc301114maxCombatEntries = 10240;
     public static boolean mc152094 = false;
     public static volatile boolean mc258859 = false;
+    public static volatile boolean mc73719 = false;
 
     @Override
     public void onLoaded() {
+        mc73719 = globalConfig.getBoolean(basePath() + ".mc-73719", mc73719,
+            "Update hitboxes and send position snaps for dragons with AI disabled.");
         mc258859 = globalConfig.getBoolean(basePath() + ".mc-258859", mc258859,
             "Use all four slope directions for surface steepness. Only affects newly generated terrain.");
         globalConfig.addCommentRegionBased(basePath(),

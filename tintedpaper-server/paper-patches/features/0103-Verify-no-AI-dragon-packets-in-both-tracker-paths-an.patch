@@ -1,0 +1,213 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 14 Nov 2026 07:47:38 -0300
+Subject: [PATCH] Verify no-AI dragon packets in both tracker paths and part
+ positioning
+
+
+diff --git a/src/test/java/org/bukkit/craftbukkit/tinted/DivineNoAiDragonTest.java b/src/test/java/org/bukkit/craftbukkit/tinted/DivineNoAiDragonTest.java
+new file mode 100644
+index 0000000000000000000000000000000000000000..faf3eb1f3c55549b93a8a5b9bf2f3b31f37f5c6c
+--- /dev/null
++++ b/src/test/java/org/bukkit/craftbukkit/tinted/DivineNoAiDragonTest.java
+@@ -0,0 +1,200 @@
++package org.bukkit.craftbukkit.tinted;
++
++import java.lang.reflect.Field;
++import java.lang.reflect.Method;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Set;
++import java.util.concurrent.atomic.AtomicReference;
++import net.minecraft.network.protocol.Packet;
++import net.minecraft.network.protocol.game.ClientboundBundlePacket;
++import net.minecraft.network.protocol.game.ClientboundEntityPositionSyncPacket;
++import net.minecraft.network.syncher.SynchedEntityData;
++import net.minecraft.server.level.ChunkMap;
++import net.minecraft.server.level.ServerEntity;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.entity.InterpolationHandler;
++import net.minecraft.world.entity.InterpolationTracker;
++import net.minecraft.world.entity.UpdateInterval;
++import net.minecraft.world.entity.ai.attributes.AttributeMap;
++import net.minecraft.world.entity.boss.enderdragon.EnderDragonPart;
++import net.minecraft.world.entity.boss.enderdragon.DragonFlightHistory;
++import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
++import net.minecraft.world.entity.boss.enderdragon.phases.DragonPhaseInstance;
++import net.minecraft.world.entity.boss.enderdragon.phases.EnderDragonPhaseManager;
++import net.minecraft.world.phys.Vec3;
++import org.bukkit.support.environment.AllFeatures;
++import org.dreeam.leaf.async.tracker.TrackerCtx;
++import org.dreeam.leaf.async.tracker.TrackerInput;
++import org.dreeam.leaf.config.modules.fixes.MCBugFix;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++import static org.mockito.ArgumentMatchers.*;
++import static org.mockito.Mockito.*;
++
++@AllFeatures
++class DivineNoAiDragonTest {
++    private final boolean oldFix = MCBugFix.mc73719;
++    private EnderDragon dragon;
++    private ServerEntity tracker;
++    private ServerEntity.Synchronizer synchronizer;
++    private AtomicReference<Vec3> position;
++    private final List<Packet<?>> packets = new ArrayList<>();
++
++    @BeforeEach
++    void setup() {
++        MCBugFix.mc73719 = true;
++        this.position = new AtomicReference<>(new Vec3(0.0, 64.0, 0.0));
++        this.dragon = mock(EnderDragon.class);
++        when(this.dragon.trackingPosition()).thenAnswer(call -> this.position.get());
++        when(this.dragon.getDeltaMovement()).thenReturn(Vec3.ZERO);
++        when(this.dragon.getPassengers()).thenReturn(List.of());
++        when(this.dragon.isNoAi()).thenReturn(true);
++        when(this.dragon.getId()).thenReturn(42);
++        when(this.dragon.getEntityData()).thenReturn(mock(SynchedEntityData.class));
++        when(this.dragon.getAttributes()).thenReturn(mock(AttributeMap.class));
++        InterpolationHandler interpolation = mock(InterpolationHandler.class);
++        when(interpolation.interpolationTracker()).thenReturn(InterpolationTracker.NO_OP);
++        when(this.dragon.getInterpolation()).thenReturn(interpolation);
++        this.synchronizer = mock(ServerEntity.Synchronizer.class);
++        doAnswer(call -> { this.packets.add(call.getArgument(0)); return null; })
++            .when(this.synchronizer).sendToTrackingPlayers(any());
++        this.tracker = new ServerEntity(mock(ServerLevel.class), this.dragon, UpdateInterval.periodic(1), false,
++            this.synchronizer, Set.of());
++    }
++
++    @AfterEach
++    void restoreConfig() {
++        MCBugFix.mc73719 = this.oldFix;
++    }
++
++    @Test
++    void normalTrackerSnapsInBothDirectionsAndUpdatesItsBase() {
++        Vec3 up = new Vec3(10.0, 70.0, -20.0);
++        this.position.set(up);
++        this.tracker.sendChanges();
++        this.assertSnap(this.packets.getLast(), up, up.add(0.0, 128.0, 0.0));
++        assertEquals(up, this.tracker.getPositionBase());
++        this.packets.clear();
++        this.tracker.sendChanges();
++        assertTrue(this.packets.isEmpty());
++        Vec3 down = new Vec3(11.0, 60.0, -20.0);
++        this.position.set(down);
++        this.tracker.sendChanges();
++        this.assertSnap(this.packets.getLast(), down, down.add(0.0, -128.0, 0.0));
++        assertEquals(down, this.tracker.getPositionBase());
++    }
++
++    @Test
++    void parallelTrackerUsesItsCapturedPositionInsteadOfALaterLivePosition() throws Exception {
++        TrackerCtx ctx = mock(TrackerCtx.class);
++        doAnswer(call -> { this.packets.add(call.getArgument(1)); return null; }).when(ctx).sendToTrackingPlayers(any(), any());
++        ChunkMap.TrackedEntity tracked = mock(ChunkMap.TrackedEntity.class);
++        this.setField(tracked, ChunkMap.TrackedEntity.class, "seenBy", Set.of());
++        Vec3 captured = new Vec3(-12.0, 72.0, 34.0);
++        this.position.set(new Vec3(1000.0, 200.0, 1000.0));
++        this.tracker.leaf$sendChanges(ctx, tracked, new TrackerInput(captured, Vec3.ZERO, false), false);
++        this.assertSnap(this.packets.getLast(), captured, captured.add(0.0, 128.0, 0.0));
++        assertEquals(captured, this.tracker.getPositionBase());
++        this.packets.clear();
++        this.tracker.leaf$sendChanges(ctx, tracked, new TrackerInput(captured, Vec3.ZERO, false), true);
++        assertEquals(1, this.packets.size());
++        this.assertSnap(this.packets.getLast(), captured, captured.add(0.0, 128.0, 0.0));
++    }
++
++    @Test
++    void stateResyncGroundChangesAndPrecisePositionRequestsStillProducePackets() throws Exception {
++        this.tracker.onPlayerAdd();
++        this.tracker.sendChanges();
++        assertEquals(1, this.packets.size());
++        this.packets.clear();
++        when(this.dragon.onGround()).thenReturn(true);
++        when(this.dragon.getYRot()).thenReturn(90.25F);
++        this.tracker.sendChanges();
++        this.assertSnap(this.packets.getLast(), this.position.get(), this.position.get().add(0.0, 128.0, 0.0));
++        this.packets.clear();
++        this.setField(this.tracker, ServerEntity.class, "teleportDelay", 400);
++        this.tracker.sendChanges();
++        assertEquals(1, this.packets.size());
++        this.packets.clear();
++        this.setField(this.tracker, ServerEntity.class, "wasRiding", true);
++        this.tracker.sendChanges();
++        assertEquals(1, this.packets.size());
++        this.packets.clear();
++        when(this.dragon.getRequiresPrecisePosition()).thenReturn(true);
++        this.tracker.sendChanges();
++        assertEquals(1, this.packets.size());
++    }
++
++    @Test
++    void disabledFixAndAiEnabledDragonsRetainTheNormalMovementPath() {
++        MCBugFix.mc73719 = false;
++        this.position.set(new Vec3(1.0, 64.0, 0.0));
++        this.tracker.sendChanges();
++        assertFalse(this.packets.isEmpty());
++        assertTrue(this.packets.stream().noneMatch(ClientboundBundlePacket.class::isInstance));
++        this.packets.clear();
++        MCBugFix.mc73719 = true;
++        when(this.dragon.isNoAi()).thenReturn(false);
++        this.position.set(new Vec3(2.0, 64.0, 0.0));
++        this.tracker.sendChanges();
++        assertFalse(this.packets.isEmpty());
++        assertTrue(this.packets.stream().noneMatch(ClientboundBundlePacket.class::isInstance));
++    }
++
++    @Test
++    void noAiPartPositionsFollowTheDragonAndItsRotation() throws Exception {
++        EnderDragon dragon = mock(EnderDragon.class, CALLS_REAL_METHODS);
++        doReturn(10.0).when(dragon).getX();
++        doReturn(64.0).when(dragon).getY();
++        doReturn(-5.0).when(dragon).getZ();
++        doReturn(0.0F).when(dragon).getYRot();
++        this.setField(dragon, EnderDragon.class, "flightHistory", new DragonFlightHistory());
++        EnderDragonPhaseManager phases = mock(EnderDragonPhaseManager.class);
++        when(phases.getCurrentPhase()).thenReturn(mock(DragonPhaseInstance.class));
++        this.setField(dragon, EnderDragon.class, "phaseManager", phases);
++        String[] names = {"body", "wing1", "wing2", "head", "neck", "tail1", "tail2", "tail3"};
++        double[][] offsets = {{0, 0, -0.5}, {4.5, 2, 0}, {-4.5, 2, 0}, {0, 0, -6.5}, {0, 0, -5.5}, {0, 1.5, 3.5}, {0, 1.5, 5.5}, {0, 1.5, 7.5}};
++        EnderDragonPart[] parts = new EnderDragonPart[names.length];
++        for (int i = 0; i < names.length; i++) {
++            parts[i] = mock(EnderDragonPart.class);
++            this.setField(dragon, EnderDragon.class, names[i], parts[i]);
++        }
++        Method positionParts = EnderDragon.class.getDeclaredMethod("positionPartsWithoutAi");
++        positionParts.setAccessible(true);
++        positionParts.invoke(dragon);
++        for (int i = 0; i < names.length; i++) {
++            verify(parts[i]).setPos(eq(10.0 + offsets[i][0]), eq(64.0 + offsets[i][1]), eq(-5.0 + offsets[i][2]));
++        }
++        doReturn(20.0).when(dragon).getX();
++        doReturn(70.0).when(dragon).getY();
++        doReturn(1.0).when(dragon).getZ();
++        doReturn(90.0F).when(dragon).getYRot();
++        positionParts.invoke(dragon);
++        verify(parts[3]).setPos(doubleThat(x -> Math.abs(x - 26.5) < 1.0E-4), eq(70.0), doubleThat(z -> Math.abs(z - 1.0) < 1.0E-4));
++    }
++
++    private void assertSnap(Packet<?> packet, Vec3 target, Vec3 detour) {
++        var bundle = assertInstanceOf(ClientboundBundlePacket.class, packet);
++        List<ClientboundEntityPositionSyncPacket> positions = new ArrayList<>();
++        bundle.subPackets().forEach(part -> positions.add(assertInstanceOf(ClientboundEntityPositionSyncPacket.class, part)));
++        assertEquals(2, positions.size());
++        assertEquals(detour, positions.getFirst().position().endPosition());
++        assertEquals(target, positions.getLast().position().endPosition());
++        for (var position : positions) {
++            assertEquals(42, position.id());
++            assertEquals(this.dragon.getYRot(), position.yRot());
++            assertEquals(this.dragon.getXRot(), position.xRot());
++            assertEquals(this.dragon.onGround(), position.onGround());
++        }
++    }
++
++    private void setField(Object target, Class<?> owner, String name, Object value) throws Exception {
++        Field field = owner.getDeclaredField(name);
++        field.setAccessible(true);
++        field.set(target, value);
++    }
++}
