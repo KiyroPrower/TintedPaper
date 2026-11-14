@@ -1,0 +1,73 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sodium <sodium@kiyro.dev>
+Date: Sat, 14 Nov 2026 15:45:48 -0300
+Subject: [PATCH] perf: Lomka enum-set codec and unchanged-position delta
+
+
+diff --git a/net/minecraft/network/FriendlyByteBuf.java b/net/minecraft/network/FriendlyByteBuf.java
+index b5910c23bbd97b430812ef242698d0f3acdb3123..2a991c436f187fbf0595004fc415e580d0715f12 100644
+--- a/net/minecraft/network/FriendlyByteBuf.java
++++ b/net/minecraft/network/FriendlyByteBuf.java
+@@ -113,28 +113,35 @@ public class FriendlyByteBuf extends ByteBuf {
+     }
+ 
+     public <E extends Enum<E>> void writeEnumSet(final EnumSet<E> set, final Class<E> clazz) {
+-        E[] values = (E[])clazz.getEnumConstants();
+-        BitSet mask = new BitSet(values.length);
+-
+-        for (int i = 0; i < values.length; i++) {
+-            mask.set(i, set.contains(values[i]));
++        // TintedPaper start - Lomka: write the fixed bit set bytes directly (same wire format as writeFixedBitSet)
++        final int length = clazz.getEnumConstants().length;
++        final byte[] out = new byte[(length + 7) >> 3];
++        for (final E value : set) {
++            final int ordinal = value.ordinal();
++            out[ordinal >> 3] |= (byte)(1 << (ordinal & 7));
+         }
+-
+-        this.writeFixedBitSet(mask, values.length);
++        this.writeBytes(out);
++        // TintedPaper end - Lomka
+     }
+ 
+     public <E extends Enum<E>> EnumSet<E> readEnumSet(final Class<E> clazz) {
+-        E[] values = (E[])clazz.getEnumConstants();
+-        BitSet mask = this.readFixedBitSet(values.length);
+-        EnumSet<E> result = EnumSet.noneOf(clazz);
+-
+-        for (int i = 0; i < values.length; i++) {
+-            if (mask.get(i)) {
+-                result.add(values[i]);
++        // TintedPaper start - Lomka: read the fixed bit set bytes directly (same wire format as readFixedBitSet)
++        final E[] values = (E[])clazz.getEnumConstants();
++        final int byteCount = (values.length + 7) >> 3;
++        final EnumSet<E> result = EnumSet.noneOf(clazz);
++        for (int i = 0; i < byteCount; i++) {
++            int bits = this.readByte() & 0xFF;
++            final int start = i << 3;
++            while (bits != 0) {
++                final int ordinal = start + Integer.numberOfTrailingZeros(bits);
++                if (ordinal < values.length) {
++                    result.add(values[ordinal]);
++                }
++                bits &= bits - 1;
+             }
+         }
+-
+         return result;
++        // TintedPaper end - Lomka
+     }
+ 
+     public <T> void writeOptional(final Optional<T> value, final StreamEncoder<? super FriendlyByteBuf, T> valueWriter) {
+diff --git a/net/minecraft/network/protocol/game/VecDeltaCodec.java b/net/minecraft/network/protocol/game/VecDeltaCodec.java
+index 0041a413c3346a7a4463f9f6eaf9137ca56802c1..39a5da9e4ce9003b2efd6f2b1e7f4d5da296bff3 100644
+--- a/net/minecraft/network/protocol/game/VecDeltaCodec.java
++++ b/net/minecraft/network/protocol/game/VecDeltaCodec.java
+@@ -68,6 +68,7 @@ public class VecDeltaCodec {
+     }
+ 
+     public Vec3 delta(final Vec3 pos) {
++        if (pos.x == this.base.x && pos.y == this.base.y && pos.z == this.base.z) return Vec3.ZERO; // TintedPaper - Lomka: no allocation for an unchanged position
+         return pos.subtract(this.base);
+     }
+ 
